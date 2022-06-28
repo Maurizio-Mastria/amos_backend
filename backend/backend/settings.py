@@ -16,9 +16,10 @@ from pathlib import Path
 from os.path import join
 import os
 # Initialise environment variables
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
-environ.Env.read_env()
+environ.Env.read_env(os.path.join(BASE_DIR,"..",".env"))
 
 SECRET_KEY = env('SECRET_KEY', default='qkl+xdr8aimpf-&x(mi7)dwt^-q77aji#j*d#02-5usa32r9!y')
 DEBUG = int(env("DEBUG", default=1))
@@ -26,7 +27,6 @@ ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS").split(" ")
 BASE_URL=env("BASE_URL")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 DISK_A_PATH = env("DISK_A_PATH")
 
 # Quick-start development settings - unsuitable for production
