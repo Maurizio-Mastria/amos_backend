@@ -184,7 +184,7 @@ FILE_UPLOAD_HANDLERS=[
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = join(BASE_DIR,"..","httpdocs","static")
+STATIC_ROOT = env("STATIC_ROOT")
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
