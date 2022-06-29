@@ -113,9 +113,9 @@ class ImportFileMixin(object):
                     response = HttpResponse(fh.read(), content_type="application/vnd.ms-excel")
                     response['Content-Disposition'] = 'inline; filename=' + importObj.filename
                     return response
-            return HttpResponseNotFound('File non trovato')
+            return HttpResponseNotFound(str(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename)))
         except:
-            return HttpResponseNotFound('File non trovato')
+            return HttpResponseNotFound(str(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename)))
 
 
         
