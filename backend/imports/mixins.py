@@ -43,7 +43,8 @@ class ImportMixin(object):
             if self.request.data["ftype"] not in ["products","orders","prices","qty"]:
                 raise APIException(detail="Tipo di import non valido!")
             filename=now.strftime("%Y%m%d%H%M%S")+"_import_"+self.request.data["ftype"]+"."+extension
-            path=os.path.join(settings.PRIVATE_DIR,Company.objects.get(id=self.request.data["company"]).vid,"import",self.request.data["ftype"])
+            relative_path=os.path.join(Company.objects.get(id=self.request.data["company"]).vid,"import",self.request.data["ftype"])
+            path=os.path.join(settings.PRIVATE_DIR,relative_path)
             datasheet={}
             datasheet["datasheet"]={}
             datasheet["index"]=""
@@ -56,7 +57,7 @@ class ImportMixin(object):
             shutil.move(self.request.FILES["file"].temporary_file_path(), os.path.join(path,filename))
             
             importObj=Import()
-            importObj.path=path
+            importObj.path=relative_path
             importObj.ftype=self.request.data["ftype"]
             importObj.company=Company(id=self.request.data["company"])
             importObj.filename=filename
@@ -106,9 +107,9 @@ class ImportFileMixin(object):
         try:
             importObj=Import.objects.get(id=pk,company=Company.objects.get(id=self.request.GET.get("company")))
                   
-            if os.path.exists(os.path.join(importObj.path,importObj.filename)):
+            if os.path.exists(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename)):
                 print("exists")
-                with open(os.path.join(importObj.path,importObj.filename), 'rb') as fh:
+                with open(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename), 'rb') as fh:
                     response = HttpResponse(fh.read(), content_type="application/vnd.ms-excel")
                     response['Content-Disposition'] = 'inline; filename=' + importObj.filename
                     return response
