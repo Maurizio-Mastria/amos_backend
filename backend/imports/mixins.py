@@ -106,16 +106,14 @@ class ImportFileMixin(object):
         
         try:
             importObj=Import.objects.get(id=pk,company=Company.objects.get(id=self.request.GET.get("company")))
-                  
             if os.path.exists(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename)):
-                print("exists")
                 with open(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename), 'rb') as fh:
                     response = HttpResponse(fh.read(), content_type="application/vnd.ms-excel")
                     response['Content-Disposition'] = 'inline; filename=' + importObj.filename
                     return response
-            return HttpResponseNotFound(str(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename)))
+            return HttpResponseNotFound("File non trovato")
         except:
-            return HttpResponseNotFound(str(os.path.join(settings.PRIVATE_DIR,importObj.path,importObj.filename)))
+            return HttpResponseNotFound("File non trovato")
 
 
         
