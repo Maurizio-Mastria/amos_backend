@@ -1,3 +1,4 @@
+from pprint import PrettyPrinter
 from urllib3 import HTTPResponse
 from rest_framework.exceptions import APIException,PermissionDenied
 from companies.models import Company
@@ -10,23 +11,40 @@ import base64
 import os
 from django.conf import settings
 from rest_framework.response import Response
+import json
+from django.core.paginator import Paginator
+
 class ProductMixin(object):
-    def get_queryset(self):
+    def retrieve(self,request,pk):
         queryset=super().get_queryset()
+        obj=queryset.get(id=pk)
         
+        product={}
+        product["id"]=obj.id
+        product["sku"]=obj.sku
+        product["gtin"]=obj.gtin
+        product["gtin_type"]=obj.gtin_type
+        product["char_eav"]=[]
+        product["text_eav"]=[]
+        product["boolean_eav"]=[]
+        product["decimal_eav"]=[]
+        product["url_eav"]=[]
+        product["int_eav"]=[]
+        product["char_eav"]=obj.char_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+        product["text_eav"]=obj.text_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+        product["boolean_eav"]=obj.boolean_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+        product["decimal_eav"]=obj.decimal_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+        product["int_eav"]=obj.int_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+        product["url_eav"]=obj.url_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+        return Response(product)
+
+    def list(self,request):
+        queryset=super().get_queryset()
         for attribute in self.request.GET:
-            if attribute=="company":
+            if attribute in ["company","marketplace","page","limit"]:
                 continue
 
-            if attribute == "marketplace":
-                value=self.request.GET.get("marketplace")
-                queryset=queryset.filter(char_eav__marketplace=value)|\
-                    queryset.filter(text_eav__marketplace=value)|\
-                        queryset.filter(int_eav__marketplace=value)|\
-                            queryset.filter(decimal_eav__marketplace=value)|\
-                                queryset.filter(boolean_eav__marketplace=value)|\
-                                    queryset.filter(url_eav__marketplace=value)
-                queryset=queryset.order_by('sku').distinct("sku")
+            
                 
             
             elif attribute == "images":
@@ -132,7 +150,37 @@ class ProductMixin(object):
                         if queryset.filter(text_eav__attribute=attribute).exists():
                             queryset=queryset.exclude(text_eav__attribute=attribute,text_eav__value__icontains=value)
         
-        return queryset.order_by('sku').distinct("sku")
+        pages=Paginator(queryset.order_by("sku").distinct("sku"),int(request.GET.get("limit")))
+        
+        
+        products=[]
+        page=pages.page(int(request.GET.get("page")))
+        for obj in page.object_list:
+            product={}
+            product["id"]=obj.id
+            product["sku"]=obj.sku
+            product["gtin"]=obj.gtin
+            product["gtin_type"]=obj.gtin_type
+            product["char_eav"]=[]
+            product["text_eav"]=[]
+            product["boolean_eav"]=[]
+            product["decimal_eav"]=[]
+            product["url_eav"]=[]
+            product["int_eav"]=[]
+            product["char_eav"]=obj.char_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+            product["text_eav"]=obj.text_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+            product["boolean_eav"]=obj.boolean_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+            product["decimal_eav"]=obj.decimal_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+            product["int_eav"]=obj.int_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+            product["url_eav"]=obj.url_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
+            products.append(product)
+        
+        return Response({"count":pages.count,"next":page.has_next(),"previous":page.has_previous(),"results":products})
+
+    
+    
+        
+        
 
     def perform_create(self,serializer):
         print(serializer.validated_data)

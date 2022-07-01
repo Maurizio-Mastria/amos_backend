@@ -289,6 +289,7 @@ class Attribute(models.Model):
     description=models.CharField(max_length=30)
     type=models.CharField(max_length=10,choices=[("INT","Intero"),("TEXT","Testo"),("BOOLEAN","Booleano"),("DECIMAL","Decimale"),("URL","Url"),("CHAR","Caratteri")])
     classification=models.CharField(max_length=2,choices=[("M","Mandatory"),("R","Recommended"),("O","Others")],default="O")
+    variation=models.BooleanField(default=False)
     class Meta:
         unique_together = ('name','company')
 

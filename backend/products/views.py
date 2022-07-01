@@ -550,46 +550,65 @@ class ProductDelete(APIView):
 class AbstractProductsListView(APIView):
     permission_classes = (And(IsAuthenticated,Or(IsSuperUser,IsStaff,IsVendor,IsVendorStaff,IsVendorCollaborator)),)
     def get(self,request,format=None):
-        
         results=[]
-        for obj in ProductSimple.objects.filter(company=request.GET.get("company")):
-            try:
-                title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
-                results.append({"title":title,"sku":obj.sku,"type":"S","id":obj.id})
-            except:
-                pass
-        for obj in ProductConfigurable.objects.filter(company=request.GET.get("company")):
-            try:
-                title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
-                results.append({"title":title,"sku":obj.sku,"type":"C","id":obj.id})
-            except:
-                pass
-        for obj in ProductMultiple.objects.filter(company=request.GET.get("company")):
-            try:
-                title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
-                results.append({"title":title,"sku":obj.sku,"type":"M","id":obj.id})
-            except:
-                pass
-        for obj in ProductBulk.objects.filter(company=request.GET.get("company")):
-            try:
-                title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
-                results.append({"title":title,"sku":obj.sku,"type":"B","id":obj.id})
-            except:
-                pass
+        if request.GET.get("type"):
+            if request.GET.get("type")=="S":
+                objs=ProductSimple.objects.filter(company=request.GET.get("company"))
+            elif request.GET.get("type")=="B":
+                objs=ProductConfigurable.objects.filter(company=request.GET.get("company"))
+            elif request.GET.get("type")=="M":
+                objs=ProductConfigurable.objects.filter(company=request.GET.get("company"))
+            elif request.GET.get("type")=="C":
+                objs=ProductConfigurable.objects.filter(company=request.GET.get("company"))
             
-            
-        return Response({"results":  results} )
+            for obj in objs:
+                try:
+                    title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
+                    results.append({"title":title,"sku":obj.sku,"type":"S","id":obj.id})
+                except:
+                    results.append({"title":None,"sku":obj.sku,"type":"S","id":obj.id})
+            return Response({"results":  results} )
+        else:
+            for obj in ProductSimple.objects.filter(company=request.GET.get("company")):
+                try:
+                    title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
+                    results.append({"title":title,"sku":obj.sku,"type":"S","id":obj.id})
+                except:
+                    results.append({"title":None,"sku":obj.sku,"type":"S","id":obj.id})
+            for obj in ProductConfigurable.objects.filter(company=request.GET.get("company")):
+                try:
+                    title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
+                    results.append({"title":title,"sku":obj.sku,"type":"C","id":obj.id})
+                except:
+                    results.append({"title":None,"sku":obj.sku,"type":"C","id":obj.id})
+            for obj in ProductMultiple.objects.filter(company=request.GET.get("company")):
+                try:
+                    title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
+                    results.append({"title":title,"sku":obj.sku,"type":"M","id":obj.id})
+                except:
+                    results.append({"title":None,"sku":obj.sku,"type":"M","id":obj.id})
+            for obj in ProductBulk.objects.filter(company=request.GET.get("company")):
+                try:
+                    title=obj.char_eav.get(sku=obj.sku,company=request.GET.get("company"),marketplace=request.GET.get("marketplace"),attribute="title").value
+                    results.append({"title":title,"sku":obj.sku,"type":"B","id":obj.id})
+                except:
+                    results.append({"title":None,"sku":obj.sku,"type":"B","id":obj.id})
+                
+                
+            return Response({"results":  results} )
 
 
 class AbstractVariationsView(APIView):
 
-    def get(self,request):
-        childs_available=set()
+    def post(self,request):
+        skus_available=set()
+        childs_availables=[]
         childs_selected=[]
-        variations_available=set()
+        skus_selected=[]
+        variations_list_available=set()
+        variations_list_selected=[]
         variations_selected=[]
 
-        abstract_products=[]
         try:
             company=Company.objects.get(id=request.GET.get("company"))
             marketplace=Marketplace.objects.get(company=company,id=request.GET.get("marketplace"))
@@ -600,41 +619,67 @@ class AbstractVariationsView(APIView):
         except:
             raise PermissionDenied(detail="Ditta errata!")
 
-        if request.GET.get("childs") not in ["",None,"null"]:
-            childs_selected=request.GET.get("childs").split(",")
-        if request.GET.get("variations") not in ["",None,"null"]:
-            variations_selected=request.GET.get("variations").split(",")
+        if request.data.get("childs") not in ["",None,"null"]:
+            for obj in request.data.get("childs"):
+                childs_selected.append(obj)
+                skus_selected.append(obj["sku"])
+        if request.data.get("variations") not in ["",None,"null"]:
+            for obj in request.data.get("variations"):
+                variations_selected.append(obj)
+                variations_list_selected.append(obj["name"])
+        
         
         #childs_selected=["PLEXTOPA1-ORO"]
+        attributes=Attribute.objects.filter(company=company,variation=True)
+        attributes_list=list(set(attributes.values_list('name',flat=True)))
+        attributes_decimal=ProductDecimalEav.objects.filter(company=company,marketplace=marketplace,attribute__in=attributes_list)
+        attributes_char=ProductCharEav.objects.filter(company=company,marketplace=marketplace,attribute__in=attributes_list)
+        attributes_int=ProductIntEav.objects.filter(company=company,marketplace=marketplace,attribute__in=attributes_list)
         
-        attributes=set(Attribute.objects.filter(company=company,classification="O").values_list('name',flat=True))
-        attributes_decimal=ProductDecimalEav.objects.filter(company=company,marketplace=marketplace,attribute__in=list(attributes))
-        attributes_char=ProductCharEav.objects.filter(company=company,marketplace=marketplace,attribute__in=list(attributes))
-        attributes_int=ProductIntEav.objects.filter(company=company,marketplace=marketplace,attribute__in=list(attributes))
-        if len(childs_selected)==0 and len(variations_selected)==0:
-            variations_available=set(attributes_decimal.values_list("attribute",flat=True)).union(set(attributes_char.values_list("attribute",flat=True))).union(set(attributes_int.values_list("attribute",flat=True)))
-            childs_available=set(attributes_decimal.values_list("sku",flat=True)).union(set(attributes_char.values_list("sku",flat=True))).union(set(attributes_int.values_list("sku",flat=True)))
+        if len(skus_selected)==0 and len(variations_list_selected)==0:
+            variations_list_available=set(attributes_decimal.values_list("attribute",flat=True)).union(set(attributes_char.values_list("attribute",flat=True))).union(set(attributes_int.values_list("attribute",flat=True)))
+            skus_available=set(attributes_decimal.values_list("sku",flat=True)).union(set(attributes_char.values_list("sku",flat=True))).union(set(attributes_int.values_list("sku",flat=True)))
             
-        elif len(childs_selected) > 0 and len(variations_selected) == 0:
+        elif len(skus_selected) > 0 and len(variations_list_selected) == 0:
                 # prendo gli attributi selezionati
-                # vedo quali sku hanno gli attributi selezionati e li metto in childs_availables (set)
+                # vedo quali sku hanno gli attributi selezionati e li metto in skus_availables (set)
                 # prendo gli attributi degli sku selezionati (intersect) e li metto in variations_availables
-            variations_available=set(attributes_decimal.filter(sku__in=childs_selected).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku__in=childs_selected).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku__in=childs_selected).values_list("attribute",flat=True)))
-            childs_available=set(attributes_decimal.filter(attribute__in=variations_available).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute__in=variations_available).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute__in=variations_available).values_list("sku",flat=True)))
+            for sku in skus_selected:
+                if len(variations_list_available)>0:
+                    variations_list_available=variations_list_available.intersection(set(attributes_decimal.filter(sku=sku).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku=sku).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku=sku).values_list("attribute",flat=True))))
+                else:
+                    variations_list_available=set(attributes_decimal.filter(sku=sku).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku=sku).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku=sku).values_list("attribute",flat=True)))   
+            skus_available=set(attributes_decimal.filter(attribute__in=variations_list_available).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute__in=variations_list_available).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute__in=variations_list_available).values_list("sku",flat=True)))
 
-        elif len(childs_selected) == 0 and len(variations_selected) > 0:
-            childs_available=set(attributes_decimal.filter(attribute__in=variations_selected).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute__in=variations_selected).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute__in=variations_selected).values_list("sku",flat=True)))
-            variations_available=set(attributes_decimal.filter(sku__in=childs_available).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku__in=childs_available).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku__in=childs_available).values_list("attribute",flat=True)))
+        elif len(skus_selected) == 0 and len(variations_list_selected) > 0:
+            for variation in variations_list_selected:
+                if len(skus_available)>0:
+                    skus_available=skus_available.intersection(set(attributes_decimal.filter(attribute=variation).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute=variation).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute=variation).values_list("sku",flat=True))))
+                else:
+                    skus_available=set(attributes_decimal.filter(attribute=variation).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute=variation).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute=variation).values_list("sku",flat=True)))
+            variations_list_available=set(attributes_decimal.filter(sku__in=skus_available).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku__in=skus_available).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku__in=skus_available).values_list("attribute",flat=True)))
 
-        elif len(childs_selected) > 0 and len(variations_selected) > 0:
-            variations_available=set(attributes_decimal.filter(sku__in=childs_selected).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku__in=childs_selected).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku__in=childs_selected).values_list("attribute",flat=True)))
-            childs_available=set(attributes_decimal.filter(attribute__in=variations_selected).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute__in=variations_selected).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute__in=variations_selected).values_list("sku",flat=True)))
+        elif len(skus_selected) > 0 and len(variations_list_selected) > 0:
+            for sku in skus_selected:
+                if len(variations_list_available)>0:
+                    variations_list_available=set(variations_list_available).intersection(set(attributes_decimal.filter(sku=sku).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku=sku).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku=sku).values_list("attribute",flat=True))))
+                else:
+                    variations_list_available=set(attributes_decimal.filter(sku=sku).values_list("attribute",flat=True)).union(set(attributes_char.filter(sku=sku).values_list("attribute",flat=True))).union(set(attributes_int.filter(sku=sku).values_list("attribute",flat=True)))
+            
+            for variation in variations_list_selected:
+                if len(skus_available)>0:
+                    skus_available=set(skus_available).intersection(set(attributes_decimal.filter(attribute=variation).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute=variation).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute=variation).values_list("sku",flat=True))))
+                else:
+                    skus_available=set(attributes_decimal.filter(attribute=variation).values_list("sku",flat=True)).union(set(attributes_char.filter(attribute=variation).values_list("sku",flat=True))).union(set(attributes_int.filter(attribute=variation).values_list("sku",flat=True)))
 
         
-        childs_available=list(set(childs_available)-set(childs_selected))
+        skus_available=list(set(skus_available)-set(skus_selected))
         
-        variations_available=list(variations_available-set(variations_selected))
-        for sku in childs_available:
+        variations_obj_availables=attributes.filter(name__in=list(set(variations_list_available)-set(variations_list_selected)))
+        variations_availables=[]
+        for obj in variations_obj_availables:
+            variations_availables.append({"name":obj.name,"description":obj.description})
+        for sku in skus_available:
             if simpleQueryset.filter(sku=sku).exists():
                 obj=simpleQueryset.get(sku=sku)
                 title=None
@@ -642,7 +687,7 @@ class AbstractVariationsView(APIView):
                     title=obj.char_eav.get(attribute="title",marketplace=marketplace,company=company).value
                 except:
                     pass
-                abstract_products.append({"id":obj.id,"sku":obj.sku,"title":title})
+                childs_availables.append({"id":obj.id,"sku":obj.sku,"title":title,"type":"S"})
 
             elif multipleQueryset.filter(sku=sku).exists():
                 obj=multipleQueryset.get(sku=sku)
@@ -651,7 +696,7 @@ class AbstractVariationsView(APIView):
                     title=obj.char_eav.get(attribute="title",marketplace=request.GET.get("marketplace"),company=company).value
                 except:
                     pass
-                abstract_products.append({"id":obj.id,"sku":obj.sku,"title":title})
+                childs_availables.append({"id":obj.id,"sku":obj.sku,"title":title,"type":"M"})
             
             elif bulkQueryset.filter(sku=sku).exists():
                 obj=bulkQueryset.get(sku=sku)
@@ -660,83 +705,7 @@ class AbstractVariationsView(APIView):
                     title=obj.char_eav.get(attribute="title",marketplace=request.GET.get("marketplace"),company=company).value
                 except:
                     pass
-                abstract_products.append({"id":obj.id,"sku":obj.sku,"title":title})
-        results={ "childs_selected": childs_selected ,  "childs_availables" : abstract_products, "variations_selected": variations_selected, "variations_available": variations_available }
+                childs_availables.append({"id":obj.id,"sku":obj.sku,"title":title,"type":"B"})
+        results={ "childs_selected": childs_selected ,  "childs_availables" : childs_availables, "variations_selected": variations_selected, "variations_availables": variations_availables }
+        
         return JsonResponse({"results":  results} )
-
-    # def post(self,request):
-    #     language="IT"
-    #     vid=None
-    #     company=None
-    #     childs_available=set()
-    #     childs_selected=[]
-    #     variations_available=set()
-    #     variations_selected=[]
-    #     marketplace=None
-    #     if request.user.is_staff:
-    #         vid=request.POST.get("vid")
-    #     else:
-    #         vid=UserInfo(user=request.user).vid
-
-    #     if request.POST.get("childs") not in ["",None,"null"]:
-    #         childs_selected=request.POST.get("childs").split(",")
-    #     if request.POST.get("variations") not in ["",None,"null"]:
-    #         variations_selected=request.POST.get("variations").split(",")
-    #     if request.POST.get("marketplace") not in ["",None,"null"]:
-    #         marketplace=request.POST.get("marketplace")
-
-    #     banned_sku=set(DraftProduct.objects.filter(vid=vid,draftType="C").values_list("sku",flat=True))
-    #     banned_sku=banned_sku.union(set(DraftProduct.objects.filter(vid=vid,draftType="B").values_list("sku",flat=True)))
-    #     objs=DraftProductEAV.objects.filter(vid=vid,language=language,marketplace=marketplace,attribute="others").exclude(value__in=["{}",""]).exclude(sku__in=banned_sku)
-
-    #     if len(childs_selected) is 0 and len(variations_selected) is 0:
-    #         for obj in objs:
-    #             try:
-    #                 variations_available=variations_available.union(set(dict(json.loads(obj.value)).keys()))
-    #             except json.decoder.JSONDecodeError:
-    #                 pass
-    #         childs_available=set(objs.order_by("sku").values_list("sku",flat=True))
-    #     elif len(childs_selected) > 0 and len(variations_selected) is 0:
-    #         for sku in childs_selected:
-    #             if len(variations_available) is 0:
-    #                 variations_available=set(dict(json.loads(objs.get(sku=sku,attribute="others").value)).keys())
-    #             else:
-    #                 variations_available=variations_available.intersection(set(dict(json.loads(objs.get(sku=sku,attribute="others").value)).keys()))
-    #         for obj in objs:
-    #             if len(variations_available-set(dict(json.loads(obj.value)).keys())) is 0:
-    #                 childs_available.add(obj.sku)
-
-    #     elif len(childs_selected) is 0 and len(variations_selected) > 0:
-    #         for obj in objs:
-    #             if len(set(variations_selected)-set(dict(json.loads(obj.value)).keys())) is 0:
-    #                 childs_available.add(obj.sku)
-    #                 if len(variations_available) is 0:
-    #                     variations_available = set(dict(json.loads(obj.value)).keys())
-    #                 else:
-    #                     variations_available = variations_available.intersection(set(dict(json.loads(obj.value)).keys()))
-    #     else:
-    #         for sku in childs_selected:
-    #             if len(variations_available) is 0:
-    #                 variations_available=set(dict(json.loads(objs.get(sku=sku,attribute="others").value)).keys())
-    #             else:
-    #                 variations_available=variations_available.intersection(set(dict(json.loads(objs.get(sku=sku,attribute="others").value)).keys()))
-    #         for obj in objs:
-    #             if len(variations_available-set(dict(json.loads(obj.value)).keys())) is 0:
-    #                 childs_available.add(obj.sku)
-
-    #         for obj in objs:
-    #             if len(set(variations_selected)-set(dict(json.loads(obj.value)).keys())) is 0:
-    #                 childs_available.add(obj.sku)
-    #                 if len(variations_available) is 0:
-    #                     variations_available = set(dict(json.loads(obj.value)).keys())
-    #                 else:
-    #                     variations_available = variations_available.intersection(set(dict(json.loads(obj.value)).keys()))
-
-    #     childs_available=list(set(childs_available)-set(childs_selected))
-    #     variations_available=list(variations_available-set(variations_selected))
-    #     childs={"availables":childs_available,"selected":childs_selected}
-    #     variations={"availables":variations_available,"selected":variations_selected}
-    #     response={"childs":childs,"variations":variations}
-    #     return JsonResponse(response)
-
-
