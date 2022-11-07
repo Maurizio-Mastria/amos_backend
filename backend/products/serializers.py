@@ -1,66 +1,83 @@
 from rest_framework import serializers
-from .models import ProductSimple,ProductMultiple,ProductBulk,ProductConfigurable
-from .models import ProductBulkOfMultiple,ProductBulkOfBulk
-from .models import ProductMultipleOfBulk,ProductMultipleOfMultiple
-from .models import ProductConfigurableOfMultiple,ProductConfigurableOfBulk
+
+
+from .models import CustomAttribute, ProductSimple,ProductMultiple,ProductBulk,ProductConfigurable
 from .models import ProductBooleanEav,ProductCharEav,ProductIntEav,ProductTextEav,ProductDecimalEav,ProductUrlEav
-from .models import Attribute
+from .models import Category,Attribute,DefaultAttribute
+
+# from .models import ProductBulkOfMultiple,ProductBulkOfBulk
+# from .models import ProductMultipleOfBulk,ProductMultipleOfMultiple
+# from .models import ProductConfigurableOfMultiple,ProductConfigurableOfBulk
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        exclude = 'company',
+        read_only_fields = ('attributes','custom_attributes','variations','marketplace')
+        depth=1
 
 class AttributeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attribute
-        exclude = ('company',)
+        fields='__all__'
         read_only_fields = ('id',)
+
+class DefaultAttributeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attribute
+        exclude = ('company',)
+class CustomAttributeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomAttribute
+        exclude = ('company',)
+        
 
 class ProductIntEavSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductIntEav
-        exclude = ('company','marketplace')
-        read_only_fields = ('id',)
+        fields = '__all__'
+        read_only_fields = ('id','company','marketplace','sku','attribute')
+
 
 class ProductCharEavSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductCharEav
-        exclude = ('company','marketplace')
-        read_only_fields = ('id',)
+        fields = '__all__'
+        read_only_fields = ('id','company','marketplace','sku','attribute')
 
 class ProductBooleanEavSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductBooleanEav
-        exclude = ('company','marketplace')
-        read_only_fields = ('id',)
+        fields = '__all__'
+        read_only_fields = ('id','company','marketplace','sku','attribute')
 
 class ProductTextEavSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductTextEav
-        exclude = ('company','marketplace')
-        read_only_fields = ('id',)
+        fields = '__all__'
+        read_only_fields = ('id','company','marketplace','sku','attribute')
 
 class ProductDecimalEavSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductDecimalEav
-        exclude = ('company','marketplace')
-        read_only_fields = ('id',)
+        fields = '__all__'
+        read_only_fields = ('id','company','marketplace','sku','attribute')
 
 class ProductUrlEavSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ProductUrlEav
-        exclude = ('company','marketplace')
-        read_only_fields = ('id',)
+        fields = '__all__'
+        read_only_fields = ('id','company','marketplace','sku','attribute')
 
 class ProductSimpleSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
     class Meta:
         model = ProductSimple
-        exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+        exclude=('company',)
+        read_only_fields = ('int_eav','boolean_eav','char_eav','decimal_eav','text_eav','url_eav')
         depth=1
+        
 
 class ProductMultipleSerializer(serializers.ModelSerializer):
     int_eav=ProductIntEavSerializer(many=True)
@@ -99,76 +116,76 @@ class ProductConfigurableSerializer(serializers.ModelSerializer):
         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
 
-class ProductBulkOfMultipleSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
-    class Meta:
-        model = ProductBulkOfMultiple
-        exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+# class ProductBulkOfMultipleSerializer(serializers.ModelSerializer):
+#     int_eav=ProductIntEavSerializer(many=True)
+#     boolean_eav=ProductBooleanEavSerializer(many=True)
+#     char_eav=ProductCharEavSerializer(many=True)
+#     decimal_eav=ProductDecimalEavSerializer(many=True)
+#     text_eav=ProductTextEavSerializer(many=True)
+#     url_eav=ProductUrlEavSerializer(many=True)
+#     class Meta:
+#         model = ProductBulkOfMultiple
+#         exclude = ('company',)
+#         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
-class ProductBulkOfBulkSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
-    class Meta:
-        model = ProductBulkOfBulk
-        exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+# class ProductBulkOfBulkSerializer(serializers.ModelSerializer):
+#     int_eav=ProductIntEavSerializer(many=True)
+#     boolean_eav=ProductBooleanEavSerializer(many=True)
+#     char_eav=ProductCharEavSerializer(many=True)
+#     decimal_eav=ProductDecimalEavSerializer(many=True)
+#     text_eav=ProductTextEavSerializer(many=True)
+#     url_eav=ProductUrlEavSerializer(many=True)
+#     class Meta:
+#         model = ProductBulkOfBulk
+#         exclude = ('company',)
+#         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
-class ProductMultipleOfBulkSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
-    class Meta:
-        model = ProductMultipleOfBulk
-        fields = '__all__'
-        read_only_fields = ('id','company','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+# class ProductMultipleOfBulkSerializer(serializers.ModelSerializer):
+#     int_eav=ProductIntEavSerializer(many=True)
+#     boolean_eav=ProductBooleanEavSerializer(many=True)
+#     char_eav=ProductCharEavSerializer(many=True)
+#     decimal_eav=ProductDecimalEavSerializer(many=True)
+#     text_eav=ProductTextEavSerializer(many=True)
+#     url_eav=ProductUrlEavSerializer(many=True)
+#     class Meta:
+#         model = ProductMultipleOfBulk
+#         fields = '__all__'
+#         read_only_fields = ('id','company','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
-class ProductMultipleOfMultipleSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
-    class Meta:
-        model = ProductMultipleOfMultiple
-        exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+# class ProductMultipleOfMultipleSerializer(serializers.ModelSerializer):
+#     int_eav=ProductIntEavSerializer(many=True)
+#     boolean_eav=ProductBooleanEavSerializer(many=True)
+#     char_eav=ProductCharEavSerializer(many=True)
+#     decimal_eav=ProductDecimalEavSerializer(many=True)
+#     text_eav=ProductTextEavSerializer(many=True)
+#     url_eav=ProductUrlEavSerializer(many=True)
+#     class Meta:
+#         model = ProductMultipleOfMultiple
+#         exclude = ('company',)
+#         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
-class ProductConfigurableOfMultipleSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
-    class Meta:
-        model = ProductConfigurableOfMultiple
-        exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+# class ProductConfigurableOfMultipleSerializer(serializers.ModelSerializer):
+#     int_eav=ProductIntEavSerializer(many=True)
+#     boolean_eav=ProductBooleanEavSerializer(many=True)
+#     char_eav=ProductCharEavSerializer(many=True)
+#     decimal_eav=ProductDecimalEavSerializer(many=True)
+#     text_eav=ProductTextEavSerializer(many=True)
+#     url_eav=ProductUrlEavSerializer(many=True)
+#     class Meta:
+#         model = ProductConfigurableOfMultiple
+#         exclude = ('company',)
+#         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
-class ProductConfigurableOfBulkSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
-    class Meta:
-        model = ProductConfigurableOfBulk
-        exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+# class ProductConfigurableOfBulkSerializer(serializers.ModelSerializer):
+#     int_eav=ProductIntEavSerializer(many=True)
+#     boolean_eav=ProductBooleanEavSerializer(many=True)
+#     char_eav=ProductCharEavSerializer(many=True)
+#     decimal_eav=ProductDecimalEavSerializer(many=True)
+#     text_eav=ProductTextEavSerializer(many=True)
+#     url_eav=ProductUrlEavSerializer(many=True)
+#     class Meta:
+#         model = ProductConfigurableOfBulk
+#         exclude = ('company',)
+#         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
 
 

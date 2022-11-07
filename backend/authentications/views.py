@@ -21,8 +21,10 @@ class LoginView(APIView):
     permission_classes = (AllowAny,)
     def post(self,request):
         if request.user.is_anonymous:
-            
-            user=User.objects.get(username=request.data["username"])
+            try:
+                user=User.objects.get(username=request.data["username"])
+            except ObjectDoesNotExist:
+                raise PermissionDenied({"detail":"Nome utente e/o password non validi"})
             if user.check_password(request.data["password"]):
 
 
@@ -93,3 +95,5 @@ class LogoutView(APIView):
     def get(self,request):
         Token.objects.get(user=request.user).delete()
         return Response({"detail":"Logout eseguito!"})
+
+

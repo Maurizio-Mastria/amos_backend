@@ -9,7 +9,7 @@ SKU_LENGTH=25
 PRODUCT_TYPE_CHOICES=[("S","Semplice"),("C","Configurabile"),("B","Misto"),("D","Digitale"),("M","Multiplo")]
 GTIN_CHOICES=[("EAN","European Article Number"),("ISBN","Identifier Standard Book Nation"),("NOGTIN",'GTIN Exemption')]
 GTIN_LENGTH=10
-ORDER_STATUS_CHOICES=[("PP","Pending Payment"),("F","Failed"),("P","Processing"),("C","Completed"),("OH","On Hold"),("C","Canceled"),("R","Refunded"),("PR","Partially Refunded")]
+ORDER_STATUS_CHOICES=[("PP","In attesa di pagamento"),("F","Fallito"),("P","In Elaborazione"),("C","Completato"),("S","Spedito"),("OH","Bloccato"),("D","Cancellato"),("R","Rimborsato"),("PR","Parzialmente rimborsato")]
 
 # SHIPPING_CHOICES=[("BRT","Bartolini"),("SDA","SDA Express Courier"),("GLS","Global Logistic Service")]
 

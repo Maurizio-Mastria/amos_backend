@@ -23,34 +23,41 @@ import authentications.views
 import companies.views
 import marketplaces.views
 import products.views
-import inventories.views
+
 import messages.views
 import orders.views
 import shippings.views
 import imports.views
 import imports.test
+import offers.views
+import stocks.views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', lambda request: redirect('admin/', permanent=False)),
 
-
+    
     #Test
     path('test/imports/', imports.test.process_imports_job,name='test-import'),
-
+    path('test/job/', imports.test.imports_job,name='test-import'),
+    path('test/delorders/', imports.test.delorders,name='test-delorders'),
 
 
     path('api/login/', authentications.views.LoginView.as_view(),name='login'),
     path('api/logout/', authentications.views.LogoutView.as_view(),name='logout'),
     
     # Companies api urls
+    
     path('api/users/', profiles.views.user_list, name ='users'),
     path('api/users/<int:pk>/', profiles.views.user_detail,name="user"),
     
     # Companies api urls
     path('api/companies/', companies.views.company_list, name ='companies'),
     path('api/companies/<int:pk>/', companies.views.company_detail,name="company"),
-
+    path('api/authorizations/', companies.views.authorizations_list,name="authorizations"),
+    path('api/authorizations/<int:pk>/', companies.views.authorization_detail,name="authorization"),
+    path('api/me/',profiles.views.user_me_detail,name="me"),
+    path('api/me/authorizations/', companies.views.my_authorizations_list,name="my_authorizations"),
     # Marketplaces api urls
     path('api/marketplaces/', marketplaces.views.marketplace_list, name ='marketplaces'),
     path('api/marketplaces/<int:pk>/', marketplaces.views.marketplace_detail, name ='marketplace'),
@@ -58,43 +65,58 @@ urlpatterns = [
     # Companies api urls
     path('api/products/simple/', products.views.product_simple_list, name ='products_simple'),
     path('api/products/simple/<int:pk>/', products.views.product_simple_detail,name="product_simple"),
-
-    path('api/products/configurable/', products.views.product_configurable_list, name ='products_configurable'),
-    path('api/products/configurable/<int:pk>/', products.views.product_configurable_detail,name="product_configurable"),
-
-    path('api/products/bulk/', products.views.product_bulk_list, name ='products_bulk'),
-    path('api/products/bulk/<int:pk>/', products.views.product_bulk_detail,name="product_bulk"),
-
-    path('api/products/multiple/', products.views.product_multiple_list, name ='products_multiple'),
-    path('api/products/multiple/<int:pk>/', products.views.product_multiple_detail,name="product_multiple"),
-
-    path('api/products/bulk_bulk/', products.views.product_bulk_of_bulk_list, name ='products_bulk_of_bulk'),
-    path('api/products/bulk_bulk/<int:pk>/', products.views.product_bulk_of_bulk_detail,name="product_bulk_of_bulk"),
-
-    path('api/products/bulk_multiple/', products.views.product_bulk_of_multiple_list, name ='products_bulk_of_multiple'),
-    path('api/products/bulk_multiple/<int:pk>/', products.views.product_bulk_of_multiple_detail,name="product_bulk_of_multiple"),
+    path('api/products/categories/', products.views.categories_list, name ='categories'),
+    path('api/products/categories/<int:pk>/', products.views.category_detail,name="category"),
+    path('api/simplify/products/categories/',products.views.categories_simplify_list, name ='categories_simplify'),
+    path('api/products/custom_attributes/', products.views.custom_attributes_list, name ='custom_attributes'),
+    path('api/products/custom_attributes/<int:pk>/', products.views.custom_attribute_detail,name="custom_attribute"),
+    path('api/stocks/simple/', stocks.views.stocks_simple_list, name ='stocks_simple'),
+    path('api/stocks/simple/<int:pk>/', stocks.views.stock_simple_detail,name="stock_simple"),
+    path('api/stocks/multiple/', stocks.views.stocks_multiple_list, name ='stocks_multiple'),
+    path('api/stocks/multiple/<int:pk>/', stocks.views.stock_multiple_detail,name="stock_multiple"),
+    path('api/stocks/bulk/', stocks.views.stocks_bulk_list, name ='stocks_bulk'),
+    path('api/stocks/bulk/<int:pk>/', stocks.views.stock_bulk_detail,name="stock_bulk"),
 
 
-    path('api/products/multiple_multiple/', products.views.product_multiple_of_multiple_list, name ='products_multiple_of_multiple'),
-    path('api/products/multiple_multiple/<int:pk>/', products.views.product_multiple_of_multiple_detail,name="product_multiple_of_multiple"),
 
-    path('api/products/multiple_bulk/', products.views.product_multiple_of_bulk_list, name ='products_multiple_of_bulk'),
-    path('api/products/multiple_bulk/<int:pk>/', products.views.product_multiple_of_bulk_detail,name="product_multiple_of_bulk"),
+    # path('api/products/configurable/', products.views.product_configurable_list, name ='products_configurable'),
+    # path('api/products/configurable/<int:pk>/', products.views.product_configurable_detail,name="product_configurable"),
 
-    path('api/products/configurable_bulk/', products.views.product_configurable_of_bulk_list, name ='products_configurable_of_bulk'),
-    path('api/products/configurable_bulk/<int:pk>/', products.views.product_configurable_of_bulk_detail,name="product_configurable_of_bulk"),
+    # path('api/products/bulk/', products.views.product_bulk_list, name ='products_bulk'),
+    # path('api/products/bulk/<int:pk>/', products.views.product_bulk_detail,name="product_bulk"),
 
-    path('api/products/configurable_bulk/', products.views.product_configurable_of_bulk_list, name ='products_configurable_of_bulk'),
-    path('api/products/configurable_bulk/<int:pk>/', products.views.product_configurable_of_bulk_detail,name="product_configurable_of_bulk"),
+    # path('api/products/multiple/', products.views.product_multiple_list, name ='products_multiple'),
+    # path('api/products/multiple/<int:pk>/', products.views.product_multiple_detail,name="product_multiple"),
 
-    path('api/products/attributes/', products.views.attribute_list, name ='attributes'),
-    path('api/products/attributes/<int:pk>/', products.views.attribute_detail,name="attribute"),
+    # path('api/products/bulk_bulk/', products.views.product_bulk_of_bulk_list, name ='products_bulk_of_bulk'),
+    # path('api/products/bulk_bulk/<int:pk>/', products.views.product_bulk_of_bulk_detail,name="product_bulk_of_bulk"),
 
-    path('api/inventories/', inventories.views.inventory_list, name ='inventories'),
-    path('api/inventories/<int:pk>/', inventories.views.inventory_detail,name="inventory"),
+    # path('api/products/bulk_multiple/', products.views.product_bulk_of_multiple_list, name ='products_bulk_of_multiple'),
+    # path('api/products/bulk_multiple/<int:pk>/', products.views.product_bulk_of_multiple_detail,name="product_bulk_of_multiple"),
 
-    path('api/messages/', messages.views.message_list, name ='messages'),
-    path('api/messages/<int:pk>/', messages.views.message_detail,name="message"),
+
+    # path('api/products/multiple_multiple/', products.views.product_multiple_of_multiple_list, name ='products_multiple_of_multiple'),
+    # path('api/products/multiple_multiple/<int:pk>/', products.views.product_multiple_of_multiple_detail,name="product_multiple_of_multiple"),
+
+    # path('api/products/multiple_bulk/', products.views.product_multiple_of_bulk_list, name ='products_multiple_of_bulk'),
+    # path('api/products/multiple_bulk/<int:pk>/', products.views.product_multiple_of_bulk_detail,name="product_multiple_of_bulk"),
+
+    # path('api/products/configurable_bulk/', products.views.product_configurable_of_bulk_list, name ='products_configurable_of_bulk'),
+    # path('api/products/configurable_bulk/<int:pk>/', products.views.product_configurable_of_bulk_detail,name="product_configurable_of_bulk"),
+
+    # path('api/products/configurable_bulk/', products.views.product_configurable_of_bulk_list, name ='products_configurable_of_bulk'),
+    # path('api/products/configurable_bulk/<int:pk>/', products.views.product_configurable_of_bulk_detail,name="product_configurable_of_bulk"),
+    # path('api/products/categories/', products.views.categories_list, name ='categories'),
+    # path('api/products/categories/<int:pk>/', products.views.category_detail,name="category"),
+    # path('api/products/attributes/', products.views.attribute_list, name ='attributes'),
+    # path('api/products/attributes/<int:pk>/', products.views.attribute_detail,name="attribute"),
+
+
+    path('api/offers/simple/', offers.views.product_simple_offers_list, name ='product_simple_offers'),
+    path('api/offers/simple/<int:pk>/', offers.views.product_simple_offer_detail,name="product_simple_offer"),
+
+    # path('api/messages/', messages.views.message_list, name ='messages'),
+    # path('api/messages/<int:pk>/', messages.views.message_detail,name="message"),
 
     path('api/orders/', orders.views.order_list, name ='orders'),
     path('api/orders/<int:pk>/', orders.views.order_detail,name="order"),
@@ -109,13 +131,13 @@ urlpatterns = [
     path('api/imports/<int:pk>/', imports.views.import_detail,name="import"),
 
     
-    path('api/files/imports/<int:pk>/',imports.views.import_file,name="import_file"),
+    # path('api/files/imports/<int:pk>/',imports.views.import_file,name="import_file"),
     
-    path('api/abstract/variations/',products.views.AbstractVariationsView.as_view(),name="abstract_variations"),
-    path('api/abstract/products/',products.views.AbstractProductsListView.as_view(),name="abstract_products_list"),
+    # path('api/abstract/variations/',products.views.AbstractVariationsView.as_view(),name="abstract_variations"),
+    # path('api/abstract/products/',products.views.AbstractProductsListView.as_view(),name="abstract_products_list"),
     
-    path('api/products/save/',products.views.ProductSave.as_view(),name="product_save"),
-    path('api/products/delete/',products.views.ProductDelete.as_view(),name="product_delete"),
+    # path('api/products/save/',products.views.ProductSave.as_view(),name="product_save"),
+    # path('api/products/delete/',products.views.ProductDelete.as_view(),name="product_delete"),
 
     
     # path('api/products/eav/url/<str:sku>/', products.views.product_url_eav_list, name ='products_url_eav'),

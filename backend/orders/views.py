@@ -1,15 +1,19 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from rest_condition import Or,And
-from backend.permissions import IsSuperUser,IsVendor,IsStaff,IsVendor,IsVendorStaff,IsVendorCollaborator
 from .serializers import OrderSerializer
-from .mixins import OrderMixin
+
+from backend.mixins import AuthorizationMixin
 from .models import Order
 
 
-class OrderViewSet(OrderMixin,viewsets.ModelViewSet):
+class OrderViewMixin(object):
+    def get_queryset(self):
+        queryset=super().get_queryset("orders")
+        return queryset.order_by("id")
+
+class OrderViewSet(OrderViewMixin,AuthorizationMixin,viewsets.ModelViewSet):
     model = Order
-    permission_classes = (And(IsAuthenticated,Or(IsSuperUser,IsStaff,IsVendor,IsVendorStaff,IsVendorCollaborator)),)
+    permission_class = IsAuthenticated
     serializer_class = OrderSerializer
 
 

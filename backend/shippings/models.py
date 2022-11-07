@@ -19,28 +19,30 @@ class Courier(models.Model):
         verbose_name_plural = "Corrieri"
 
 class Shipping(models.Model):
-    tracking=models.CharField(max_length=50)
+    tracking=models.CharField(max_length=50,null=True)
     company=models.ForeignKey(Company,on_delete=models.CASCADE)
     marketplace=models.ForeignKey(Marketplace,on_delete=models.SET_NULL,null=True)
     courier=models.ForeignKey(Courier,on_delete=models.SET_NULL,null=True)
-    create=models.DateTimeField(default=timezone.now)
+    create=models.DateTimeField(null=True)
     sent=models.DateTimeField(null=True)
-    name=models.CharField(max_length=50)
-    address=models.CharField(max_length=50)
-    phone=PhoneNumberField(blank=True)
-    city=models.CharField(max_length=50)
-    cap=models.CharField(max_length=5,blank=True)
-    country=models.CharField(max_length=20)
+    shipping_name=models.CharField(max_length=50,verbose_name="Nome Destinatario")
+    shipping_address=models.CharField(max_length=50,verbose_name="Indirizzo destinatario")
+    shipping_phone=PhoneNumberField(blank=True,verbose_name="Telefono destinatario")
+    shipping_city=models.CharField(max_length=50,verbose_name="Città di destinazione")
+    shipping_cap=models.CharField(max_length=5,blank=True,null=True,verbose_name="CAP di destinazione")
+    shipping_country=models.CharField(max_length=20,verbose_name="Nazione di destinazione")
+    shipping_state=models.CharField(max_length=20,verbose_name="Provincia di destinazione",null=True)
+
     status=models.CharField(max_length=2,choices=[("N","Nuova"),("C","Creata"),("S","Inviata"),("E","Errore"),("W","Attenzione"),("T","In transito"),("D","Consegnata")],default="N")
     qty=models.PositiveIntegerField(default=1)
-    cod=models.DecimalField(max_digits=6,decimal_places=2,blank=True)
-    cod_method=models.CharField(max_length=2,choices=[("C","Contante"),("A","Assegno"),("D","Come consegnata")],blank=True)
+    cod=models.DecimalField(max_digits=6,decimal_places=2,blank=True,null=True)
+    cod_method=models.CharField(max_length=2,choices=[("C","Contante"),("A","Assegno"),("D","Come consegnata")],blank=True,null=True)
     class Meta:
         verbose_name = "Spedizione"
         verbose_name_plural = "Spedizioni"
 
     def __str__(self):
-        return str(self.tracking)+"_"+str(self.name)+"_"+str(self.city)+"_"+str(self.country)
+        return str(self.shipping_name)+","+str(self.shipping_city)+","+str(self.shipping_country)
 
 class ShippingList(models.Model):
     company=models.ForeignKey(Company,on_delete=models.CASCADE)

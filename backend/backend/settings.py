@@ -36,6 +36,7 @@ DISK_A_PATH = env("DISK_A_PATH")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
+    #'backend.apps.CustomAdminConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -53,7 +54,7 @@ INSTALLED_APPS = [
     'companies',
     'marketplaces',
     'products',
-    'inventories',
+    'offers',
     'messages.apps.MessagesConfig',
     'shippings',
     'orders',
@@ -61,6 +62,7 @@ INSTALLED_APPS = [
     'customers',
     'buckets',
     'imports',
+    'stocks'
     
     
 ]

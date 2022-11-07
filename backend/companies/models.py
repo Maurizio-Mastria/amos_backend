@@ -5,9 +5,6 @@ import string
 import random
 
 class Company(models.Model):
-    vendors=models.ManyToManyField(User,blank=True,related_name="vendors")
-    staff=models.ManyToManyField(User,blank=True,related_name="staff")
-    collaborators=models.ManyToManyField(User,blank=True,related_name="collaborators")
     vid=models.CharField(max_length=10,blank=True)
     name=models.CharField(max_length=50)
     vat=models.CharField(max_length=20)
@@ -21,15 +18,44 @@ class Company(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     active=models.BooleanField(default=False)
-
+    
     def __str__(self):
-        return self.name
+        return self.vid
 
     def save(self, *args, **kwargs):
         if not self.pk:
             self.vid=generate_vid()
         super(Company, self).save(*args, **kwargs)
-    
+
+class Authorization(models.Model):
+    class Permissions(models.IntegerChoices):
+        DENY=0
+        READ=1
+        MODIFY=2
+        
+    class Applications(models.Choices):
+        PRODUCT="products"
+        ORDER="orders"
+        MARKETPLACE="marketplaces"
+        COMPANY="companies"
+        SHIPPING="shippings"
+        COURIERS="couriers"
+        MESSAGES="messages"
+        AUTHORIZATIONS="authorizations"
+        IMPORTS="imports"
+        OFFERS="offers"
+
+        
+    company=models.ForeignKey(Company,on_delete=models.CASCADE)
+    user=models.ForeignKey(User,on_delete=models.CASCADE)
+    application=models.CharField(max_length=15,choices=Applications.choices)
+    permission=models.IntegerField(choices=Permissions.choices,default=Permissions.DENY)
+
+    class Meta:
+        unique_together=('company','user','application')
+
+    def __str__(self):
+        return str(self.company)+" "+str(self.user)+str(self.application)+str(self.permission)
 
 
 def generate_vid():

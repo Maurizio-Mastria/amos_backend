@@ -1,6 +1,8 @@
+from pprint import PrettyPrinter
 import urllib
 from openpyxl import load_workbook,Workbook
 import csv
+from marketplaces.models import Marketplace
 from products.models import ProductSimple
 from products.models import ProductBooleanEav,ProductCharEav,ProductIntEav,ProductDecimalEav,ProductTextEav,ProductUrlEav
 from django.db.utils import DataError
@@ -9,7 +11,10 @@ import os
 from io import BytesIO
 from PIL import Image
 import urllib
-
+from orders.models import Order,OrderDetail
+from customers.models import Customer
+from shippings.models import Shipping
+from datetime import datetime
  
         
 class WorkBook():
@@ -275,56 +280,223 @@ class WorkBook():
         return messages
 
     
+    def importDatasheetToOrders(self,company,sheetindex,jump,columns,rows):
+        ws=self.book.worksheets[sheetindex]
         
+        messages={}
+        j=0
+        k=0
+        orders={}
+        try:
+            for row in ws.iter_rows():
+                
+                
+                #salto le righe che non servono
+                if jump>=0:
+                    jump-=1
+                    continue
+                
+                j+=1
+                try:
+                    if rows[j-1] is not True:
+                        continue
+                except IndexError:
+                    continue
+                
+                
+                i=0
+                order_data={}
+                for cell in row:
+                    if str(i) in columns:
+                        order_data[columns[str(i)]["name"]]=cell.value
+                    i+=1
+                try:
+                    if order_data["order_id"] in ["",None]:
+                        continue
+                except KeyError:
+                    continue
+                if order_data["order_id"] not in orders:
+                    orders[order_data["order_id"]]=[]
+                orders[order_data["order_id"]].append(order_data)
 
-        #         if cell.value is not None:
-        #             ws_row.append(str(cell.value))
-        #             stop=False
-        #         else:
-        #             ws_row.append("")
-        #     if stop:
-        #         return wslist
-        #     else:
-        #         wslist.append(ws_row)
-        # return wslist
+        except:
+            print("1")
+            messages[0]={"Sono presenti degli errori! Nessun ordine è stato inserito!"}
+            return messages
 
+        k=0
+        for order_id,details in orders.items():
+            print("into")
+            k+=1
+            messages[k]={}
+            
 
+            if Order.objects.filter(company=company,order_id=order_id).exists():
+                messages[k][order_id]="L'ordine esiste già!"
+                continue
+            
 
+            customerObj=None
+            shippingObj=None
+            orderObj=None
+            
+            order_price=0
+            order_iva=0
+            shipping_price=0
+            shipping_iva=0
+            order_total=0
+            shipping_total=0
+            order_shipping_total=0
+            first=True
+            for detail in details:
+                print("detail")
+                
+                marketplace=None
+                if detail["marketplace"][:-3].lower()=="amazon":
+                    code="AMZ"
+                    country=detail["marketplace"][-2:].upper()
+                    marketplace=Marketplace.objects.get(company=company,code=code,country=country)
+                else:
+                    continue
+                
+                print("superatomarketplace")
+                if first:
+                    try:
+                        customerObj=Customer(company=company,marketplace=marketplace,customer_email=detail["customer_email"],customer_name=detail["customer_name"])
+                        print("creato customer")
+                    except:
+                        messages[k][order_id]="Il cliente non ha un nome e/o un'email validi"
+                        first=False
+                        break
+                    try:
+                        customerObj.customer_phone=detail["customer_phone"]
+                    except KeyError:
+                        customerObj.customer_phone=None
+                    try:
+                        shippingObj=Shipping(company=company,marketplace=marketplace,shipping_name=detail["shipping_name"],shipping_address=detail["shipping_address"],shipping_city=detail["shipping_city"])
+                        shippingObj.shipping_country=detail["shipping_country"]
+                        shippingObj.shipping_cap=detail["shipping_cap"]
+                        print("creato shipping")
+                        if detail["shipping_country"]=="IT":
+                            shippingObj.shipping_phone=detail["shipping_phone"]
+                            shippingObj.shipping_state=detail["shipping_state"]
+                    except:
+                        first=False
+                        break
+                    try:
+                        customerObj.save()
+                        print("salvato customer")
+                    except:
+                        first=False
+                        break
+                    try:
+                        shippingObj.save()
+                        print("salvato shipping")
+                    except DataError as exc:
+                        first=False
+                        customerObj.delete()
+                        messages[k][order_id]=str(exc)
+                        break
+                    first=False
+                try:
+                    orderDetailObj=OrderDetail(company=company,marketplace=marketplace,sku=detail["sku"],order_id=detail["order_id"])
+                    orderDetailObj.order_item_id=detail["order_item_id"]
+                    orderDetailObj.qty=detail["qty"]
+                    orderDetailObj.price=detail["price"]
+                    orderDetailObj.iva=detail["iva"]
+                    orderDetailObj.shipping_price=detail["shipping_price"]
+                    orderDetailObj.shipping_iva=detail["shipping_iva"]
+                    print("creato detail")
+                    
+                    # orderDetailObj.title=detail["title"]
+                    order_price=float(order_price)+float(detail["price"])
+                    order_iva=float(order_iva)+float(detail["iva"])
+                    shipping_price=float(shipping_price)+float(detail["shipping_price"])
+                    shipping_iva=float(shipping_iva)+float(detail["shipping_iva"])
+                    order_total+=order_price+order_iva
+                    shipping_total+=shipping_price+shipping_iva
+                    order_shipping_total=order_total+shipping_total
+                    print("creato detail prezzi")
+                except:
+                    print("eccezione cancello tutto detail")
+                    customerObj.delete()
+                    shippingObj.delete()
+                    shippingObj=None
+                    customerObj=None
+                try:
+                    if detail["payments_date"] not in [None,""]:
+                        orderDetailObj.payments_date=detail["payments_date"]
+                        orderDetailObj.status="P"
+                except:
+                    #default Pending Payment if no date payments is present
+                    pass
+                try:
+                    orderDetailObj.date=detail["date"]
+                except:
+                    orderDetailObj.date=datetime.now()
+                try:                
+                    orderDetailObj.business=detail["business"].title()
+                except:
+                    orderDetailObj.business=False
+                try:
+                    if "title" in detail and detail["title"] not in [None,""]:
+                        orderDetailObj.title=detail["title"]
+                    else:
+                        title=ProductCharEav.objects.get(company=company,marketplace=marketplace,sku=detail["sku"]).title
+                        orderDetailObj.title=title
+                except:
+                    pass
+                
+                
+                
+                if orderObj:
+                    print("in order obj")
+                    try:
+                        orderDetailObj.shipping=shippingObj
+                        orderDetailObj.customer=customerObj
+                        orderDetailObj.save()
+                        print("salvato detail agganciati customer e shipping")
+                        orderObj.order_price=order_price
+                        orderObj.order_iva=order_iva
+                        orderObj.shipping_price=shipping_price
+                        orderObj.shipping_iva=shipping_iva
+                        orderObj.order_total=order_total
+                        orderObj.shipping_total=shipping_total
+                        orderObj.order_shipping_total=order_shipping_total
+                        orderObj.save()
+                        print("salvato order")
+                        orderObj.order_detail.add(orderDetailObj)
+                        print("salvato order agganciato detail")
+                    except:
+                        print("delete order e detail")
+                        for orderDetail in orderObj.order_detail.all():
+                            orderDetail.delete()
+                        orderObj.delete()
+                        customerObj.delete()
+                        shippingObj.delete()
+                else:
+                    print("in ordre else")
+                    try:
+                        orderObj=Order(company=company,marketplace=marketplace,order_id=order_id)
+                        print("creato order")
+                        orderDetailObj.shipping=shippingObj
+                        orderDetailObj.customer=customerObj
+                        orderDetailObj.save()
+                        print("salvato order detail else")
+                        orderObj.order_price=order_price
+                        orderObj.order_iva=order_iva
+                        orderObj.shipping_price=shipping_price
+                        orderObj.shipping_iva=shipping_iva
+                        orderObj.order_total=order_total
+                        orderObj.shipping_total=shipping_total
+                        orderObj.order_shipping_total=order_shipping_total
+                        orderObj.save()
+                        print("salvato order else")
+                        orderObj.order_detail.add(orderDetailObj)
+                    except Exception as exc:
+                        print("eccezione else order customer shipping")
+                        customerObj.delete()
+                        shippingObj.delete()
 
-
-
-         # def getWSlistCSV(url,delimiter,cut=False):
-    #     wslist=[]
-    #     d=None
-    #     if delimiter=="PV":
-    #         d=";"
-    #     elif delimiter=="V":
-    #         d=","
-    #     elif delimiter=="T":
-    #         d="\t"
-    #     else:
-    #         return None
-
-    #     with closing(requests.get(url, stream=True)) as csvfile:
-    #         book = csv.reader(codecs.iterdecode(csvfile.iter_lines(),'utf-8-sig'),delimiter=d)
-    #         for row in book:
-    #             stop=True
-    #             ws_row=[]
-    #             for cell in row:
-    #                 if cell is not None:
-    #                     if type(cell) is str and cut:
-    #                         ws_row.append(cell[:50])
-    #                     else:
-    #                         ws_row.append(cell)
-    #                     stop=False
-    #                 else:
-    #                     ws_row.append("")
-
-    #             if stop:
-    #                 book.close()
-    #                 csvfile.close()
-    #                 return wslist
-    #             else:
-    #                 wslist.append(ws_row)
-
-    #     return wslist
+        
+        return messages

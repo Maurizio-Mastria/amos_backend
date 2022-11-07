@@ -28,7 +28,7 @@ class InventoryDimension(models.Model):
         unique_together = ('sku','company')
 
     def __str__(self):
-        return str(self.company)+"_"+str(self.marketplace)+"_"+str(self.sku)
+        return str(self.company)+"_"+str(self.sku)
 
 
 class InventoryOffer(models.Model):
@@ -60,7 +60,7 @@ class Inventory(models.Model):
         unique_together = ('sku','company')
     
     def __str__(self):
-        return str(self.company)+"_"+str(self.marketplace)+"_"+str(self.sku)
+        return str(self.company)+"_"+str(self.sku)
 
 
 

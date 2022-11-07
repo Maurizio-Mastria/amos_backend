@@ -1,103 +1,42 @@
-from genericpath import exists
 from rest_framework.exceptions import APIException,PermissionDenied
-from companies.models import Company
+from companies.models import Company,Authorization
 from django.db.utils import IntegrityError
+from django.contrib.auth.mixins import UserPassesTestMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 
 
-class GenericModelMixin(object):
+class NoAuthorizationMixin(object):
     def get_queryset(self):
-        queryset=self.model.objects.all()
-        return queryset
+        if not Company.objects.filter(pk=self.request.GET.get("company")).exists():
+            raise PermissionDenied("Permesso negato")
+        return self.model.objects.filter(company=self.request.GET.get("company"))
 
+class AuthorizationMixin(object):
 
-class CompanyModelMixin(object):
-    def get_queryset(self):
-        queryset=super().get_queryset()
-        try:
-            company=Company.objects.get(id=self.request.GET.get("company"))
-            return queryset.filter(company=company).order_by("id")
-        except:
-            raise PermissionDenied(detail="Ditta errata!")
-
-class UserMixin(object):
-    def get_queryset(self):
-        queryset=super().get_queryset()
-        try:
-            return queryset.filter(user=self.request.user).order_by("id")
-        except:
-            raise PermissionDenied(detail="Ditta errata!")
-
-
-class VendorModelMixin(object):
-    def get_queryset(self):
-        try:
-            company=Company.objects.filter(id=self.request.GET.get("company"))
-            queryset=self.model.objects.filter(company=company[0]).order_by('id')
-        except:
-            raise APIException(detail="Devi inserire la ditta")
-        if not self.request.user.is_superuser or not self.request.user.is_staff:
-            company=Company.objects.filter(id=self.request.GET.get("id"),vendors=self.request.user)|\
-                Company.objects.filter(id=self.request.GET.get("id"),staff=self.request.user)|\
-                    Company.objects.filter(id=self.request.GET.get("id"),collaborators=self.request.user)
-            if company.exists():
-                queryset=self.model.objects.filter(company=company[0]).order_by("id")
+    def get_queryset(self,application):
+        if not Company.objects.filter(pk=self.request.GET.get("company")).exists():
+            raise PermissionDenied("Permesso negato")
+        if self.request.user.is_superuser or self.request.user.is_staff:
+            if "company" in [field.name for field in self.model._meta.fields]:
+                return self.model.objects.filter(company=self.request.GET.get("company"))
             else:
-                raise APIException(detail="Ditta errata")
-        
-        
-        for key in self.request.GET:
-            if key=="company":
-                continue
-            else:
-                queryset=queryset.filter(**{key:self.request.GET.get(key)})
-                queryset=queryset.order_by('create').order_by('sent')
-
-        return queryset
-
-    def perform_create(self,serializer):
-        if not self.request.user.is_superuser and not self.request.user.is_staff:
-            company=Company.objects.filter(vendors=self.request.user)|\
-                Company.objects.filter(staff=self.request.user)|\
-                    Company.objects.filter(collaborators=self.request.user)
-            try:
-                if serializer.validated_data["company"] not in company.values_list(flat=True):
-                    raise PermissionDenied(detail="Ditta errata")
-                if serializer.is_valid():
-                    serializer.save()
-                else:
-                    raise APIException(detail="Errore!")
-            except IntegrityError as exc:
-                raise PermissionDenied(detail=exc)
+                return self.model.objects.all()
+        permission=Authorization.Permissions.DENY
+        if self.request.method in ["GET"]:
+            permission=Authorization.Permissions.READ
+        elif self.request.method in ["PUT"]:
+            permission=Authorization.Permissions.MODIFY
+        # Prendi solo le compagnie cui l'utente ha un permesso uguale o superiore a quello dato
+        try:
+            if Authorization.objects.get(user=self.request.user,application=application,company=self.request.GET.get("company")).permission<permission:
+                raise PermissionDenied("Permesso negato")
+        except:
+            raise PermissionDenied("Permesso negato")
+        if "company" in [field.name for field in self.model._meta.fields]:
+            return self.model.objects.filter(company=self.request.GET.get("company"))
         else:
-            try:
-                if serializer.is_valid():
-                    serializer.save()
-                else:
-                    raise APIException(detail="Errore!")
-            except IntegrityError:
-                raise PermissionDenied(detail="%s già esistente" % (self.model._meta.verbose_name))
-                
-    def perform_update(self,serializer):
-        if not self.request.user.is_superuser and not self.request.user.is_staff:
-            company=Company.objects.filter(vendors=self.request.user)|\
-                Company.objects.filter(staff=self.request.user)|\
-                    Company.objects.filter(collaborators=self.request.user)
-            try:
-                if serializer.validated_data["company"] not in company.values_list(flat=True):
-                    raise PermissionDenied(detail="Ditta errata")
-                if serializer.is_valid():
-                    serializer.save()
-                else:
-                    raise APIException(detail="Errore!")
-            except IntegrityError as exc:
-                raise PermissionDenied(detail=exc)
-        else:
-            try:
-                if serializer.is_valid():
-                    serializer.save()
-                else:
-                    raise APIException(detail="Errore!")
-            except IntegrityError:
-                raise PermissionDenied(detail="%s già esistente" % (self.model._meta.verbose_name))
+            return self.model.objects.all()
+
+
 
 
