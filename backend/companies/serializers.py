@@ -1,11 +1,21 @@
 from rest_framework import serializers
 from .models import Company, Authorization
 from django.contrib.auth.models import User
+
+class VendorUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id','username','first_name','last_name')
+        read_only_fields = ('id','username','first_name','last_name')
+        
+
 class CompanySerializer(serializers.ModelSerializer):
+    
     class Meta:
         model = Company
         fields = '__all__'
-
+        depth=0
+    
 
 class AuthUserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -15,16 +25,18 @@ class AuthUserSerializer(serializers.ModelSerializer):
         depth=1
 
 class AuthorizationSerializer(serializers.ModelSerializer):
-    user=AuthUserSerializer()
+    
     class Meta:
         model = Authorization
-        fields = ('id','application','permission','user')
-        read_only_fields=('application','user')
+        fields = '__all__'
+        
+        depth=1
 
 
-class AuthorizationUpdateSerializer(serializers.ModelSerializer):
+
+class AuthorizationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Authorization
-        exclude = ('user',)
+        fields = '__all__'
         
         

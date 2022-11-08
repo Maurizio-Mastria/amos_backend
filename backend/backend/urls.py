@@ -77,7 +77,7 @@ urlpatterns = [
     path('api/stocks/bulk/', stocks.views.stocks_bulk_list, name ='stocks_bulk'),
     path('api/stocks/bulk/<int:pk>/', stocks.views.stock_bulk_detail,name="stock_bulk"),
 
-
+    path('api/auth/', companies.views.auth_create,name="auth"),
 
     # path('api/products/configurable/', products.views.product_configurable_list, name ='products_configurable'),
     # path('api/products/configurable/<int:pk>/', products.views.product_configurable_detail,name="product_configurable"),

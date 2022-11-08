@@ -5,12 +5,14 @@ import string
 import random
 
 class Company(models.Model):
+    
+
     vid=models.CharField(max_length=10,blank=True)
     name=models.CharField(max_length=50)
     vat=models.CharField(max_length=20)
     city = models.CharField(max_length=30)
     province = models.CharField(max_length=2)
-    country = models.CharField(max_length=2,default="IT")
+    country = models.CharField(max_length=2,default="IT",choices=[("IT","Italia"),("ES","Spagna"),("DE","Germania"),("UK","United Kingdom"),("FR","Francia")])
     cap = models.CharField(max_length=5)
     address = models.CharField(max_length=50)
     pec=models.EmailField(blank=True)
@@ -18,6 +20,7 @@ class Company(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     active=models.BooleanField(default=False)
+    vendor=models.ForeignKey(User,on_delete=models.CASCADE,null=True)
     
     def __str__(self):
         return self.vid
@@ -27,11 +30,14 @@ class Company(models.Model):
             self.vid=generate_vid()
         super(Company, self).save(*args, **kwargs)
 
+    
+
 class Authorization(models.Model):
     class Permissions(models.IntegerChoices):
         DENY=0
         READ=1
         MODIFY=2
+        DELETE=3
         
     class Applications(models.Choices):
         PRODUCT="products"

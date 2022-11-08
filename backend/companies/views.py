@@ -1,16 +1,17 @@
 from rest_framework.exceptions import APIException,PermissionDenied
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from .serializers import CompanySerializer,AuthorizationSerializer,AuthorizationUpdateSerializer
+from .serializers import CompanySerializer,AuthorizationSerializer,AuthorizationCreateSerializer
 from companies.models import Company,Authorization
 from backend.mixins import AuthorizationMixin
 from django.db.utils import IntegrityError
 from django.http.response import JsonResponse
+from django.contrib.auth.models import User
 
 class CompanyViewMixin(object):
     
     def get_queryset(self):
-        if self.request.user.is_superuser or self.request.user.is_staff:
+        if self.request.user.is_superuser or (self.request.user.is_staff and self.request.method != "DELETE"):
             return self.model.objects.all()
         permission=Authorization.Permissions.DENY
         if self.request.method in ["GET"]:
@@ -44,14 +45,24 @@ class CompanyViewMixin(object):
         except IntegrityError:
             raise PermissionDenied(detail="%s già esistente" % (self.model._meta.verbose_name.title()))
 
+    def perform_destroy(self, instance):
+        
+        instance.delete()
+        
+        
+        
+        
+
+    
+
 
 class CompanyViewSet(CompanyViewMixin,viewsets.ModelViewSet):
     model = Company
     permission_class = IsAuthenticated
     serializer_class = CompanySerializer
-    
+
 company_list = CompanyViewSet.as_view({'get':'list','post':'create'})
-company_detail = CompanyViewSet.as_view({'get':'retrieve','put':'update','delete':'destroy'})
+company_detail = CompanyViewSet.as_view({'get':'retrieve','put':'partial_update','delete':'destroy'})
 
 #################################################################
 
@@ -80,15 +91,15 @@ class AuthorizationViewSet(AuthorizationViewMixin,AuthorizationMixin,viewsets.Mo
     
     
 authorizations_list = AuthorizationViewSet.as_view({'get':'list'})
+authorization_detail = AuthorizationViewSet.as_view({'put':'partial_update'})
 
-class AuthorizationUpdateViewMixin(object):
+class AuthorizationCreateViewMixin(object):
     
     def get_queryset(self):
         return super().get_queryset("authorizations").order_by("id")
         
 
-    def perform_update(self,serializer):
-        print(serializer.initial_data["user"])
+    def perform_create(self,serializer):
         try:
             if serializer.is_valid():
                 serializer.save()
@@ -98,13 +109,12 @@ class AuthorizationUpdateViewMixin(object):
             raise PermissionDenied(detail="%s già esistente" % (self.model._meta.verbose_name.title()))
 
 
-class AuthorizationUpdateViewSet(AuthorizationUpdateViewMixin,AuthorizationMixin,viewsets.ModelViewSet):
+class AuthorizationCreateViewSet(AuthorizationCreateViewMixin,AuthorizationMixin,viewsets.ModelViewSet):
     model = Authorization
     permission_class = IsAuthenticated
-    serializer_class = AuthorizationUpdateSerializer
+    serializer_class = AuthorizationCreateSerializer
 
-authorization_detail = AuthorizationViewSet.as_view({'put':'partial_update'})
-
+auth_create = AuthorizationCreateViewSet.as_view({'post':'create'})
 
 
 class MyAuthorizationsViewMixin(object):
