@@ -20,36 +20,70 @@ from backend.mixins import AuthorizationMixin
 from django.db.models import Q
 from rest_framework import serializers
 from .serializers import ProductIntEavSerializer,ProductCharEavSerializer,ProductDecimalEavSerializer,ProductBooleanEavSerializer,ProductTextEavSerializer,ProductUrlEavSerializer
-from .models import Category,CustomAttribute,Attribute,DefaultAttribute,ProductSimple,Variation,ProductCharEav,ProductBooleanEav,ProductIntEav,ProductDecimalEav,ProductTextEav,ProductUrlEav
+from .models import Category,CustomAttribute,Attribute,DefaultAttribute
+from .models import ProductSimple,ProductConfigurable,ProductMultiple,ProductBulk
+from .models import ProductCharEav,ProductBooleanEav,ProductIntEav,ProductDecimalEav,ProductTextEav,ProductUrlEav
 from django.core import serializers
 from django.http import JsonResponse
 from stocks.models import StockBulkProduct,StockMultipleProduct,StockSimpleProduct
+from django.core.exceptions import ObjectDoesNotExist
+
 class CustomAttributeViewMixin(object):
-    def get_queryset(self):
-        queryset=super().get_queryset("products")
-        return queryset.order_by("id")
-
-class CategoryViewMixin(object):
-
     def get_queryset(self):
         queryset=super().get_queryset("products")
         return queryset.order_by("id")
 
     def perform_create(self,serializer):
         company=Company.objects.get(id=self.request.GET.get("company"))
+        if serializer.is_valid():
+            serializer.validated_data["company"]=company
+            serializer.save()
+
+class CategoryViewMixin(object):
+
+    def get_queryset(self):
+        queryset=super().get_queryset("products")
+        queryset=queryset.filter(marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace")))
+        if self.request.GET.get("simple"):
+            queryset=queryset.filter(simple__id=self.request.GET.get("simple"))
+        if self.request.GET.get("configurable"):
+            queryset=queryset.filter(configurable__id=self.request.GET.get("configurable"))
+        if self.request.GET.get("bulk"):
+            queryset=queryset.filter(bulk__id=self.request.GET.get("bulk"))
+        if self.request.GET.get("multiple"):
+            queryset=queryset.filter(multiple__id=self.request.GET.get("multiple"))
+        return queryset.order_by("id")
+
+    def perform_create(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
         marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        otherMarketplaces=Marketplace.objects.filter(account=marketplace.account,code=marketplace.code,company=marketplace.company).exclude(id=marketplace.id)
+        otherParents=None
         parent=None
         if serializer.initial_data["parent"] is not None:
             if Category.objects.filter(company=company,marketplace=marketplace,id=serializer.initial_data["parent"]).exists():
                 parent=Category.objects.get(company=company,marketplace=marketplace,id=serializer.initial_data["parent"])
-        
+                otherParents=Category.objects.filter(company=parent.company,marketplace__code=parent.marketplace.code,marketplace__account=parent.marketplace.account).exclude(id=parent.id)
+            
         try:
             if serializer.is_valid():
                 serializer.validated_data["company"]=company
                 serializer.validated_data["marketplace"]=marketplace
                 serializer.validated_data["parent"]=parent
-                serializer.validated_data["attributes"]=serializer.initial_data["attributes"]
                 serializer.save()
+                for market in otherMarketplaces:
+                    data={}
+                    data["title"]=serializer.initial_data["title"]
+                    data["name"]=serializer.initial_data["name"]
+                    newSerializer=CategorySerializer(data=data)
+                    if newSerializer.is_valid():
+                        newSerializer.validated_data["company"]=company
+                        newSerializer.validated_data["marketplace"]=market
+                        if otherParents is not None:
+                            newSerializer.validated_data["parent"]=Category.objects.get(id=otherParents.get(marketplace=market).id,company=company)
+                        else:
+                            newSerializer.validated_data["parent"]=None
+                        newSerializer.save()
             else:
                 raise APIException(detail="Errore!")
         except IntegrityError:
@@ -58,17 +92,120 @@ class CategoryViewMixin(object):
     def perform_update(self,serializer):
         company=Company.objects.get(id=self.request.GET.get("company"))
         marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
-        parent=None
-        if serializer.initial_data["parent"] is not None:
-            try:
-                parent=Category.objects.get(company=company,marketplace=marketplace,id=serializer.initial_data["parent"])
-            except:
-                raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
+        otherMarketplaces=Marketplace.objects.filter(account=marketplace.account,code=marketplace.code,company=marketplace.company).exclude(id=marketplace.id)
+        otherParents=None
+        newData={}
+        
+        for market in otherMarketplaces:
+            newData[market]={}
+        
+        if "parent" in serializer.initial_data:
+            if serializer.initial_data["parent"] is not None:
+                try:
+                    parent=Category.objects.get(company=company,marketplace=marketplace,id=serializer.initial_data["parent"])
+                    serializer.validated_data["parent"]=parent
+                    otherParents=Category.objects.filter(company=parent.company,marketplace__code=parent.marketplace.code,marketplace__account=parent.marketplace.account,name=parent.name).exclude(id=parent.id)
+                    for oParent in otherParents:
+                        newData[oParent.marketplace]["parent"]=oParent
+                except:
+                    raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
+            else:
+                serializer.validated_data["parent"]=None
+                for market in otherMarketplaces:
+                    newData[market]["parent"]=None
+        if "attributes" in serializer.initial_data:
+            serializer.validated_data["attributes"]=serializer.initial_data["attributes"]
+            for market in otherMarketplaces:
+                newData[market]["attributes"]=serializer.initial_data["attributes"]
+        if "custom_attributes" in serializer.initial_data:
+            serializer.validated_data["custom_attributes"]=serializer.initial_data["custom_attributes"]
+            for market in otherMarketplaces:
+                newData[market]["custom_attributes"]=serializer.initial_data["custom_attributes"]
+
+        if "variations" in serializer.initial_data:
+            serializer.validated_data["variations"]=serializer.initial_data["variations"]
+            for market in otherMarketplaces:
+                newData[market]["variations"]=serializer.initial_data["variations"]
+
+        if "custom_variations" in serializer.initial_data:
+            serializer.validated_data["custom_variations"]=serializer.initial_data["custom_variations"]
+            for market in otherMarketplaces:
+                newData[market]["custom_variations"]=serializer.initial_data["custom_variations"]
+
+        if "_simple" in serializer.initial_data:
+            if len(serializer.initial_data["_simple"]) is not None:
+                try:
+                    simple=ProductSimple.objects.filter(company=company,id__in=serializer.initial_data["_simple"])
+                    serializer.validated_data["simple"]=simple
+                    for market in otherMarketplaces:
+                        newData[market]["simple"]=simple
+                except:
+                    raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
+            else:
+                serializer.validated_data["simple"]=None
+                for market in otherMarketplaces:
+                    newData[market]["simple"]=None
+
+        if "_configurable" in serializer.initial_data:
+            if len(serializer.initial_data["_configurable"]) is not None:
+                try:
+                    configurable=ProductConfigurable.objects.filter(company=company,id__in=serializer.initial_data["_configurable"])
+                    serializer.validated_data["configurable"]=configurable
+                    for market in otherMarketplaces:
+                        newData[market]["configurable"]=configurable
+                except:
+                    raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
+            else:
+                serializer.validated_data["configurable"]=None
+                for market in otherMarketplaces:
+                    newData[market]["configurable"]=None
+
+        if "_bulk" in serializer.initial_data:
+            if len(serializer.initial_data["_bulk"]) is not None:
+                try:
+                    bulk=ProductBulk.objects.filter(company=company,id__in=serializer.initial_data["_bulk"])
+                    serializer.validated_data["bulk"]=bulk
+                    for market in otherMarketplaces:
+                        newData[market]["bulk"]=bulk
+                except:
+                    raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
+            else:
+                serializer.validated_data["bulk"]=None
+                for market in otherMarketplaces:
+                    newData[market]["bulk"]=None
+        if "_multiple" in serializer.initial_data:
+            if len(serializer.initial_data["_multiple"]) is not None:
+                try:
+                    multiple=ProductMultiple.objects.filter(company=company,id__in=serializer.initial_data["_multiple"])
+                    serializer.validated_data["multiple"]=multiple
+                    for market in otherMarketplaces:
+                        newData[market]["multiple"]=multiple
+                except:
+                    raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
+            else:
+                serializer.validated_data["multiple"]=None
+                for market in otherMarketplaces:
+                    newData[market]["multiple"]=None
+        
         try:
             if serializer.is_valid():
-                serializer.validated_data["parent"]=parent
-                serializer.validated_data["attributes"]=serializer.initial_data["attributes"]
-                serializer.save()
+                thisCategory=Category.objects.get(company=company,marketplace=marketplace,id=serializer.instance.id)
+                saved=serializer.save()
+                otherCategories=Category.objects.filter(company=company,marketplace__in=otherMarketplaces,name=thisCategory.name).exclude(id=thisCategory.id)
+                for market,data in newData.items():
+                    print(data)
+                    category=otherCategories.get(company=company,marketplace=market)
+                    if "title" not in data:
+                        data["title"]=saved.title
+                    if "name" not in data:
+                        data["name"]=saved.name
+                    newSerializer=CategorySerializer(instance=category,data=data)
+                    if newSerializer.is_valid():
+                        for key,value in data.items():
+                            newSerializer.validated_data[key]=value
+                        newSerializer.save()
+                    else:
+                        raise APIException(detail=newSerializer.errors)
             else:
                 raise APIException(detail="Errore!")
         except IntegrityError:
@@ -78,46 +215,73 @@ class CategoryViewMixin(object):
 class CategorySimplifyViewMixin(object):
 
     def list(self,request):
-        
         all_categories={}
-        for marketplace in Marketplace.objects.filter(company=self.request.GET.get("company")):
-            queryset=super().get_queryset("products").filter(marketplace=marketplace).order_by("id")
-            catSerializer=CategorySerializer(queryset,many=True)
-            categories=json.loads(json.dumps(catSerializer.data))
-            all_categories[marketplace.id]=categories
+        marketplace=Marketplace.objects.get(company=self.request.GET.get("company"),id=self.request.GET.get("marketplace"))
+        queryset=super().get_queryset("products").filter(marketplace=marketplace).order_by("id")
+        catSerializer=CategorySerializer(queryset,many=True)
+        categories=json.loads(json.dumps(catSerializer.data))
 
-
-        def find_parent(tree,id):
+        def find_parent(atree,id):
             i=0
-            while i<len(tree):
-                if tree[i]["id"]==id:
-                    return tree[i]
+            while i<len(atree):
+                if atree[i]["id"]==id:
+                    return atree[i]
                 else:
-                    if tree[i]["childs"] is not None:
-                        obj=find_parent(tree[i]["childs"],id)
+                    if atree[i]["childs"] is not None:
+                        obj=find_parent(atree[i]["childs"],id)
                         if obj!=None:
                             return obj
                 i+=1
             return None
-        trees={}
-        for marketid,categories in all_categories.items():
-            tree=[]
-            i=0
-            while len(categories)>0:
-                if categories[i]["parent"] is None:
-                    tree.append({"id":categories[i]["id"],"childs":[],"title":categories[i]["title"],"name":categories[i]["name"],"attributes":categories[i]["attributes"],"variations":categories[i]["variations"]})
+        
+        tree=[]
+        
+        i=0
+        while len(categories)>0:
+            if categories[i]["parent"] is None:
+                tree.append(
+                    {
+                        "id":categories[i]["id"],
+                        "childs":[],
+                        "title":categories[i]["title"],
+                        "name":categories[i]["name"],
+                        "attributes":categories[i]["attributes"],
+                        "custom_attributes":categories[i]["custom_attributes"],
+                        "variations":categories[i]["variations"],
+                        "custom_variations":categories[i]["custom_variations"],
+                        'simple':categories[i]["simple"],
+                        'bulk':categories[i]["bulk"],
+                        'configurable':categories[i]["configurable"],
+                        'multiple':categories[i]["multiple"],
+                        'parent':categories[i]["parent"]
+                        })
+                categories.pop(i)
+                i=0
+            else:
+                parent=find_parent(tree,categories[i]["parent"]["id"])
+                if parent is not None:
+                    parent["childs"].append(
+                    {
+                        "id":categories[i]["id"],
+                        "childs":[],
+                        "title":categories[i]["title"],
+                        "name":categories[i]["name"],
+                        "attributes":categories[i]["attributes"],
+                        "custom_attributes":categories[i]["custom_attributes"],
+                        "variations":categories[i]["variations"],
+                        "custom_variations":categories[i]["custom_variations"],
+                        'simple':categories[i]["simple"],
+                        'bulk':categories[i]["bulk"],
+                        'configurable':categories[i]["configurable"],
+                        'multiple':categories[i]["multiple"],
+                        'parent':categories[i]["parent"]
+                        })
                     categories.pop(i)
                     i=0
                 else:
-                    parent=find_parent(tree,categories[i]["parent"]["id"])
-                    if parent is not None:
-                        parent["childs"].append({"id":categories[i]["id"],"childs":[],"title":categories[i]["title"],"name":categories[i]["name"],"attributes":categories[i]["attributes"],"variations":categories[i]["variations"]})
-                        categories.pop(i)
-                        i=0
-                    else:
-                        i+=1
-            trees[marketid]=tree
-        return JsonResponse({"results":trees})
+                    i+=1
+        
+        return JsonResponse({"results":tree})
 
     
     
@@ -133,170 +297,19 @@ class ProductSimpleViewMixin(object):
 
     def get_queryset(self):
         queryset=super().get_queryset("products")
+        search=None
+        if self.request.GET.get("search"):
+            search=self.request.GET.get("search")
+            marketplace=self.request.GET.get("marketplace")
+            queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
+                |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
+                |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
+            return queryset.order_by("id").distinct()
+                
+
         return queryset.order_by("id")
 
 
-    #     return context
-        # for attribute in self.request.GET:
-        #     if attribute in ["company","marketplace","page","limit"]:
-        #         continue
-
-            
-                
-            
-        #     elif attribute == "images":
-        #         value=self.request.GET.get("images")
-        #         queryset=queryset.filter(url_eav__attribute__icontains="image").exclude(url_eav__value="")
-        #         queryset=queryset.order_by('sku').distinct("sku")
-        #     elif attribute == "attributes":
-        #         values=self.request.GET.get("attributes").split(",")
-        #         company=Company.objects.get(id=self.request.GET.get("company"))
-        #         for name in values:
-                
-        #             if Attribute.objects.filter(type="TEXT",name=name,company=company).exists():
-        #                 queryset=queryset.filter(text_eav__attribute=name).exclude(text_eav__value="")
-        #             elif Attribute.objects.filter(type="URL",name=name,company=company).exists():
-        #                 queryset=queryset.filter(url_eav__attribute=name).exclude(url_eav__value="")
-        #             elif Attribute.objects.filter(type="DECIMAL",name=name,company=company).exists():
-        #                 queryset=queryset.filter(decimal_eav__attribute=name).exclude(decimal_eav__value="")
-        #             elif Attribute.objects.filter(type="INT",name=name,company=company).exists():
-        #                 queryset=queryset.filter(int_eav__attribute=name).exclude(int_eav__value="")
-        #             elif Attribute.objects.filter(type="BOOLEAN",name=name,company=company).exists():
-        #                 queryset=queryset.filter(boolean_eav__attribute=name).exclude(boolean_eav__value="")
-        #             elif Attribute.objects.filter(type="CHAR",name=name,company=company).exists():
-        #                 queryset=queryset.filter(char_eav__attribute=name).exclude(char_eav__value="")
-        #             queryset=queryset.order_by('sku').distinct("sku")
-        #     else:
-        #         value=self.request.GET.get(attribute)[2:]
-        #         operator=self.request.GET.get(attribute)[:2]
-                
-
-        #         if operator == ">=":
-        #             if attribute not in ["sku","gtin","gtin_type"]:
-        #                 if queryset.filter(int_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(int_eav__attribute=attribute,int_eav__value__gte=value)
-        #                 if queryset.filter(decimal_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(decimal_eav__attribute=attribute,decimal_eav__value__gte=value)
-
-        #         elif operator == "<=":
-        #             if attribute not in ["sku","gtin","gtin_type"]:
-        #                 if queryset.filter(int_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(int_eav__attribute=attribute,int_eav__value__lte=value)
-        #                 if queryset.filter(decimal_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(decimal_eav__attribute=attribute,decimal_eav__value__lte=value)
-
-        #         elif operator == "<>":
-        #             if attribute in ["sku","gtin","gtin_type"]:
-        #                 queryset=queryset.exclude(**{attribute:value})
-        #             else:
-        #                 if queryset.filter(char_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(char_eav__attribute=attribute,char_eav__value=value)
-        #                 if queryset.filter(text_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(text_eav__attribute=attribute,text_eav__value=value)
-        #                 if queryset.filter(int_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(int_eav__attribute=attribute,int_eav__value=value)
-        #                 if queryset.filter(decimal_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(decimal_eav__attribute=attribute,decimal_eav__value=value)
-        #                 if queryset.filter(boolean_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(boolean_eav__attribute=attribute,boolean_eav__value=value)
-        #                 if queryset.filter(url_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(url_eav__attribute=attribute,url_eav__value=value)
-        #         elif operator == "==":
-        #             if attribute in ["sku","gtin","gtin_type"]:
-        #                 queryset=queryset.filter(**{attribute:value})
-        #             else:
-        #                 if queryset.filter(char_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(char_eav__attribute=attribute,char_eav__value=value)
-        #                 if queryset.filter(text_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(text_eav__attribute=attribute,text_eav__value=value)
-        #                 if queryset.filter(int_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(int_eav__attribute=attribute,int_eav__value=value)
-        #                 if queryset.filter(decimal_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(decimal_eav__attribute=attribute,decimal_eav__value=value)
-        #                 if queryset.filter(boolean_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(boolean_eav__attribute=attribute,boolean_eav__value=value)
-        #                 if queryset.filter(url_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(url_eav__attribute=attribute,url_eav__value=value)
-        #         elif operator == ">>":
-        #             if attribute not in ["sku","gtin","gtin_type"]:
-        #                 if queryset.filter(int_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(int_eav__attribute=attribute,int_eav__value__gt=value)
-        #                 if queryset.filter(decimal_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(decimal_eav__attribute=attribute,decimal_eav__value__gt=value)
-        #         elif operator == "<<":
-        #             if attribute not in ["sku","gtin","gtin_type"]:
-        #                 if queryset.filter(int_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(int_eav__attribute=attribute,int_eav__value__lt=value)
-        #                 if queryset.filter(decimal_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(decimal_eav__attribute=attribute,decimal_eav__value__lt=value)
-                
-        #         elif operator == "cc":
-        #             if attribute in ["sku","gtin","gtin_type"]:
-        #                 queryset=queryset.filter(**{attribute+'__icontains':value})
-        #             else:
-        #                 if queryset.filter(char_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(char_eav__attribute=attribute,char_eav__value__icontains=value)
-        #                 if queryset.filter(text_eav__attribute=attribute).exists():
-        #                     queryset=queryset.filter(text_eav__attribute=attribute,text_eav__value__icontains=value)
-        #         elif operator == "nc":
-        #             if attribute in ["sku","gtin","gtin_type"]:
-        #                 queryset=queryset.exclude(**{attribute+'__icontains':value})
-        #             else:
-        #                 if queryset.filter(char_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(char_eav__attribute=attribute,char_eav__value__icontains=value)
-        #                 if queryset.filter(text_eav__attribute=attribute).exists():
-        #                     queryset=queryset.exclude(text_eav__attribute=attribute,text_eav__value__icontains=value)
-        
-        
-        
-        
-        # products=[]
-        
-        # for obj in page.object_list:
-        #     product={}
-        #     product["id"]=obj.id
-        #     product["sku"]=obj.sku
-        #     product["gtin"]=obj.gtin
-        #     product["gtin_type"]=obj.gtin_type
-        #     product["char_eav"]=[]
-        #     product["text_eav"]=[]
-        #     product["boolean_eav"]=[]
-        #     product["decimal_eav"]=[]
-        #     product["url_eav"]=[]
-        #     product["int_eav"]=[]
-        #     product["char_eav"]=obj.char_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-        #     product["text_eav"]=obj.text_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-        #     product["boolean_eav"]=obj.boolean_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-        #     product["decimal_eav"]=obj.decimal_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-        #     product["int_eav"]=obj.int_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-        #     product["url_eav"]=obj.url_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-        #     products.append(product)
-        
-        # return Response({"count":pages.count,"next":page.has_next(),"previous":page.has_previous(),"results":products})
-
-    
-    # def retrieve(self,request,pk):
-    #     queryset=super().get_queryset()
-    #     obj=queryset.get(id=pk)
-        
-    #     product={}
-    #     product["id"]=obj.id
-    #     product["sku"]=obj.sku
-    #     product["gtin"]=obj.gtin
-    #     product["gtin_type"]=obj.gtin_type
-    #     product["char_eav"]=[]
-    #     product["text_eav"]=[]
-    #     product["boolean_eav"]=[]
-    #     product["decimal_eav"]=[]
-    #     product["url_eav"]=[]
-    #     product["int_eav"]=[]
-    #     product["char_eav"]=obj.char_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-    #     product["text_eav"]=obj.text_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-    #     product["boolean_eav"]=obj.boolean_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-    #     product["decimal_eav"]=obj.decimal_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-    #     product["int_eav"]=obj.int_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-    #     product["url_eav"]=obj.url_eav.filter(marketplace=self.request.GET.get("marketplace")).values()
-    #     return Response(product)
         
         
 
@@ -316,91 +329,101 @@ class ProductSimpleViewMixin(object):
                 
     def perform_update(self,serializer):
         
-        # se fa parte di un configurabile non si può cambiare la categoria. La si deve cambiare dal configurabile
-        
         company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        simple=ProductSimple.objects.get(company=company,sku=serializer.validated_data["sku"])
         
         eav_type_objs={}
         for val in ["INT","DECIMAL","BOOLEAN","URL","TEXT","CHAR"]:
             eav_type_objs[val]=[]
-
         
-        for marketplace_id,attributes in serializer.initial_data["marketplace"].items():
-            marketplace=Marketplace.objects.get(company=company,id=marketplace_id)
-            for attribute,value in attributes.items():
-                eav_type=None
-                if DefaultAttribute.objects.filter(name=attribute).exists():
-                    eav_type=DefaultAttribute.objects.get(name=attribute).type
-                elif category.attributes.filter(name=attribute).exists():
-                    eav_type=category.attributes.get(name=attribute).type
-                elif category.custom_attribute.filter(name=attribute).exists():
-                    eav_type=category.custom_attribute.get(name=attribute).type
-                else:
-                    raise APIException(detail="L'attributo '"+str(attribute)+"' non esiste!")
-                
-                if eav_type is not None:
-                    obj=None
-                    if eav_type=="DECIMAL":
+        
+        for attribute,value in serializer.initial_data["marketplace"][str(marketplace.id)].items():
+            eav_type=None
+            
+            if DefaultAttribute.objects.filter(name=attribute).exists():
+                eav_type=DefaultAttribute.objects.get(name=attribute).type
+            elif Attribute.objects.filter(name=attribute).exists():
+                eav_type=Attribute.objects.get(name=attribute).type
+            elif marketplace.code=="AMZ" and attribute=="asin":
+                eav_type="CHAR"
+            
+            else:
+                raise APIException(detail="L'attributo '"+str(attribute)+"' non esiste!")
+            
+            if eav_type is not None:
+                obj=None
+                if eav_type=="DECIMAL":
+                    if "value" in value and "unit" in value:
                         try:
                             obj=ProductDecimalEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
-                            obj.value=value
+                            obj.value=value["value"]
+                            obj.unit=value["unit"]
+                            print(obj.unit)
                         except ProductDecimalEav.DoesNotExist:
-                            obj=ProductDecimalEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
+                            obj=ProductDecimalEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value["value"],unit=value["unit"])
                         data=json.loads(serializers.serialize("json",[obj,]))
                         fields=data[0]["fields"]
                         fields["id"]=data[0]["pk"]
                         modelSerializer=ProductDecimalEavSerializer(data=fields)
-                    elif eav_type=="INT":
-                        try:
-                            obj=ProductIntEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
-                            obj.value=value
-                        except ProductIntEav.DoesNotExist:
-                            obj=ProductIntEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
-                        data=json.loads(serializers.serialize("json",[obj,]))
-                        fields=data[0]["fields"]
-                        fields["id"]=data[0]["pk"]
-                        modelSerializer=ProductIntEavSerializer(data=fields)
-                    elif eav_type=="URL":
-                        try:
-                            obj=ProductUrlEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
-                            obj.value=value
-                        except ProductUrlEav.DoesNotExist:
-                            obj=ProductUrlEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
-                        data=json.loads(serializers.serialize("json",[obj,]))
-                        fields=data[0]["fields"]
-                        fields["id"]=data[0]["pk"]
-                        modelSerializer=ProductUrlEavSerializer(data=fields)
-                    elif eav_type=="BOOLEAN":
-                        try:
-                            obj=ProductBooleanEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
-                            obj.value=value
-                        except ProductBooleanEav.DoesNotExist:
-                            obj=ProductBooleanEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
-                        data=json.loads(serializers.serialize("json",[obj,]))
-                        fields=data[0]["fields"]
-                        fields["id"]=data[0]["pk"]
-                        modelSerializer=ProductBooleanEavSerializer(data=fields)
-                    elif eav_type=="TEXT":
-                        try:
-                            obj=ProductTextEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
-                            obj.value=value
-                        except ProductTextEav.DoesNotExist:
-                            obj=ProductTextEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
-                        data=json.loads(serializers.serialize("json",[obj,]))
-                        fields=data[0]["fields"]
-                        fields["id"]=data[0]["pk"]
-                        modelSerializer=ProductTextEavSerializer(data=fields)
-                    elif eav_type=="CHAR":
-                        try:
-                            obj=ProductCharEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
-                            obj.value=value
-                        except ProductCharEav.DoesNotExist:
-                            obj=ProductCharEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
-                        data=json.loads(serializers.serialize("json",[obj,]))
-                        fields=data[0]["fields"]
-                        fields["id"]=data[0]["pk"]
-                        modelSerializer=ProductCharEavSerializer(data=fields)
-                        
+                elif eav_type=="INT":
+                    try:
+                        obj=ProductIntEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
+                        obj.value=value
+                    except ProductIntEav.DoesNotExist:
+                        obj=ProductIntEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
+                    data=json.loads(serializers.serialize("json",[obj,]))
+                    fields=data[0]["fields"]
+                    fields["id"]=data[0]["pk"]
+                    modelSerializer=ProductIntEavSerializer(data=fields)
+                elif eav_type=="URL":
+                    try:
+                        obj=ProductUrlEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
+                        obj.value=value
+                    except ProductUrlEav.DoesNotExist:
+                        obj=ProductUrlEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
+                    data=json.loads(serializers.serialize("json",[obj,]))
+                    fields=data[0]["fields"]
+                    fields["id"]=data[0]["pk"]
+                    modelSerializer=ProductUrlEavSerializer(data=fields)
+                elif eav_type=="BOOLEAN":
+                    try:
+                        obj=ProductBooleanEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
+                        obj.value=value
+                    except ProductBooleanEav.DoesNotExist:
+                        obj=ProductBooleanEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
+                    data=json.loads(serializers.serialize("json",[obj,]))
+                    fields=data[0]["fields"]
+                    fields["id"]=data[0]["pk"]
+                    modelSerializer=ProductBooleanEavSerializer(data=fields)
+                elif eav_type=="TEXT":
+                    try:
+                        obj=ProductTextEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
+                        obj.value=value
+                    except ProductTextEav.DoesNotExist:
+                        obj=ProductTextEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)
+                    data=json.loads(serializers.serialize("json",[obj,]))
+                    fields=data[0]["fields"]
+                    fields["id"]=data[0]["pk"]
+                    modelSerializer=ProductTextEavSerializer(data=fields)
+                elif eav_type=="CHAR":
+                    try:
+                        obj=ProductCharEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
+                        obj.value=value
+                    except ProductCharEav.DoesNotExist:
+                        obj=ProductCharEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value)                    
+                    data=json.loads(serializers.serialize("json",[obj,]))
+                    fields=data[0]["fields"]
+                    fields["id"]=data[0]["pk"]
+                    modelSerializer=ProductCharEavSerializer(data=fields)
+
+                if eav_type=="DECIMAL" and "value" in value and value["value"] in ["",None] and obj.id:
+                    obj.delete()
+                elif eav_type=="DECIMAL" and ("value" not in value or "unit" not in value):
+                    pass
+                elif  eav_type!="DECIMAL" and value in ["",None] and obj.id:
+                    obj.delete()
+                else:
                     try:
                         if modelSerializer.is_valid():
                             eav_type_objs[eav_type].append(obj)
@@ -412,7 +435,6 @@ class ProductSimpleViewMixin(object):
             if serializer.is_valid():
                 serializer.save()
                 productObj=ProductSimple.objects.get(id=serializer.data["id"])
-                productObj.category=category
                 productObj.save()
                 for eav_type,eav_objs in eav_type_objs.items():
                     for eav_obj in eav_objs:
@@ -450,3 +472,52 @@ class AbstractProductListMixin(object):
                         queryset.filter(boolean_eav__marketplace=marketplace)|\
                             queryset.filter(url_eav__marketplace=marketplace)
         queryset=queryset.order_by('sku').distinct("sku")
+
+
+class ProductConfigurableViewMixin(object):
+
+    def get_queryset(self):
+        queryset=super().get_queryset("products")
+        search=None
+        if self.request.GET.get("search"):
+            search=self.request.GET.get("search")
+            marketplace=self.request.GET.get("marketplace")
+            queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
+                |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
+                |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
+            return queryset.order_by("id").distinct()
+                
+
+        return queryset.order_by("id")
+
+class ProductBulkViewMixin(object):
+
+    def get_queryset(self):
+        queryset=super().get_queryset("products")
+        search=None
+        if self.request.GET.get("search"):
+            search=self.request.GET.get("search")
+            marketplace=self.request.GET.get("marketplace")
+            queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
+                |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
+                |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
+            return queryset.order_by("id").distinct()
+                
+
+        return queryset.order_by("id")
+
+class ProductMultipleViewMixin(object):
+
+    def get_queryset(self):
+        queryset=super().get_queryset("products")
+        search=None
+        if self.request.GET.get("search"):
+            search=self.request.GET.get("search")
+            marketplace=self.request.GET.get("marketplace")
+            queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
+                |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
+                |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
+            return queryset.order_by("id").distinct()
+                
+
+        return queryset.order_by("id")

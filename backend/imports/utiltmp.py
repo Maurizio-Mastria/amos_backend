@@ -1,5 +1,3 @@
-from pprint import PrettyPrinter
-import urllib
 from openpyxl import load_workbook,Workbook
 import csv
 from marketplaces.models import Marketplace

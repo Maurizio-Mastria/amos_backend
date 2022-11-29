@@ -9,6 +9,7 @@ class CustomAttribute(models.Model):
     company=models.ForeignKey(Company,on_delete=models.CASCADE)
     description=models.CharField(max_length=30)
     type=models.CharField(max_length=10,choices=[("INT","Intero"),("TEXT","Testo"),("BOOLEAN","Booleano"),("DECIMAL","Decimale"),("URL","Url"),("CHAR","Caratteri")])
+    
     class Meta:
         unique_together = ('name','company')
     def __str__(self):
@@ -18,6 +19,7 @@ class DefaultAttribute(models.Model):
     name=models.CharField(max_length=30,unique=True)
     description=models.CharField(max_length=30)
     type=models.CharField(max_length=10,choices=[("INT","Intero"),("TEXT","Testo"),("BOOLEAN","Booleano"),("DECIMAL","Decimale"),("URL","Url"),("CHAR","Caratteri")])
+    
     def __str__(self):
         return str(self.name)
 
@@ -25,13 +27,10 @@ class Attribute(models.Model):
     name=models.CharField(max_length=30,unique=True)
     description=models.CharField(max_length=30)
     type=models.CharField(max_length=10,choices=[("INT","Intero"),("TEXT","Testo"),("BOOLEAN","Booleano"),("DECIMAL","Decimale"),("URL","Url"),("CHAR","Caratteri")])
+    
+    
     def __str__(self):
         return str(self.name)
-
-class Variation(models.Model):
-    attribute=models.ForeignKey(Attribute,on_delete=models.CASCADE,default=None)
-    def __str__(self):
-        return str(self.attribute)
 
 
 class ProductBooleanEav(models.Model):
@@ -61,6 +60,7 @@ class ProductDecimalEav(models.Model):
     company=models.ForeignKey(Company,on_delete=models.CASCADE)
     attribute=models.CharField(max_length=30)
     value=models.DecimalField(max_digits=6,decimal_places=2)
+    unit=models.CharField(max_length=3, choices=[("m","Metri"),("cm","Centimetri"),("mm","Millimetri"),("L","Litri"),("mL","Millilitri"),("cL","Centilitri"),("g","Grammi"),("Kg","Kilogrammi")],default="cm")
     marketplace=models.ForeignKey(Marketplace,on_delete=models.CASCADE)
     class Meta:
         unique_together = ('company','attribute','marketplace','sku')
@@ -102,20 +102,7 @@ class ProductUrlEav(models.Model):
 
 
 
-class Category(models.Model):
-    name=models.CharField(max_length=50)
-    title=models.CharField(max_length=100)
-    custom_attributes=models.ManyToManyField(CustomAttribute,blank=True)
-    attributes=models.ManyToManyField(Attribute,blank=True)
-    variations=models.ManyToManyField(Variation,blank=True)
-    parent = models.ForeignKey('self', blank=True, null=True, on_delete=models.CASCADE,related_name='children')
-    marketplace = models.ForeignKey(Marketplace,on_delete=models.CASCADE)
-    company=models.ForeignKey(Company,on_delete=models.CASCADE)
-   
-    class Meta:
-        unique_together = ('company','name','marketplace')
-    def __str__(self):
-        return str(self.company)+"_"+str(self.marketplace)+"_"+str(self.title)
+
 
 class ProductSimple(models.Model):
     sku=models.CharField(max_length=globals.SKU_LENGTH,verbose_name="SKU")
@@ -128,7 +115,7 @@ class ProductSimple(models.Model):
     decimal_eav=models.ManyToManyField(ProductDecimalEav,blank=True)
     boolean_eav=models.ManyToManyField(ProductBooleanEav,blank=True)
     url_eav=models.ManyToManyField(ProductUrlEav,blank=True)
-    categories=models.ManyToManyField(Category,blank=True)
+    
 
     class Meta:
         unique_together = ('sku','company')
@@ -171,7 +158,7 @@ class ProductBulk(models.Model):
     decimal_eav=models.ManyToManyField(ProductDecimalEav,blank=True)
     boolean_eav=models.ManyToManyField(ProductBooleanEav,blank=True)
     url_eav=models.ManyToManyField(ProductUrlEav,blank=True)
-    categories=models.ManyToManyField(Category,blank=True)
+    
     class Meta:
         unique_together = ('sku','company')
 
@@ -231,7 +218,7 @@ class ProductConfigurable(models.Model):
     sku=models.CharField(max_length=globals.SKU_LENGTH)
     company=models.ForeignKey(Company,on_delete=models.CASCADE)
     products=models.ManyToManyField(ProductSimple)
-    variations=models.TextField()
+    variations=models.ForeignKey(Attribute,on_delete=models.CASCADE)
     int_eav=models.ManyToManyField(ProductIntEav,blank=True)
     char_eav=models.ManyToManyField(ProductCharEav,blank=True)
     text_eav=models.ManyToManyField(ProductTextEav,blank=True)
@@ -257,7 +244,24 @@ class ProductConfigurable(models.Model):
             eav.delete()
         super(ProductConfigurable,self).delete(*args,**kwargs)
 
-
+class Category(models.Model):
+    name=models.CharField(max_length=50)
+    title=models.CharField(max_length=100)
+    custom_attributes=models.ManyToManyField(CustomAttribute,blank=True)
+    attributes=models.ManyToManyField(Attribute,blank=True)
+    variations=models.ManyToManyField(Attribute,blank=True,related_name="variations")
+    custom_variations=models.ManyToManyField(CustomAttribute,blank=True,related_name="custom_variations")
+    parent = models.ForeignKey('self', blank=True, null=True, on_delete=models.CASCADE,related_name='children')
+    marketplace = models.ForeignKey(Marketplace,on_delete=models.CASCADE)
+    company=models.ForeignKey(Company,on_delete=models.CASCADE)
+    simple=models.ManyToManyField(ProductSimple,blank=True)
+    bulk=models.ManyToManyField(ProductBulk,blank=True)
+    configurable=models.ManyToManyField(ProductConfigurable,blank=True)
+    multiple=models.ManyToManyField(ProductMultiple,blank=True)
+    class Meta:
+        unique_together = ('company','name','marketplace')
+    def __str__(self):
+        return str(self.company)+"_"+str(self.marketplace)+"_"+str(self.title)
 
 # class ProductBulkOfBulk(models.Model):
 #     sku=models.CharField(max_length=globals.SKU_LENGTH)

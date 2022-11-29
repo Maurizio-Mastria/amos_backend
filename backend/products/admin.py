@@ -6,7 +6,7 @@ from django.contrib.admin import ModelAdmin
 from .models import ProductSimple,ProductMultiple,ProductBulk,ProductConfigurable
 from .models import ProductBooleanEav,ProductCharEav,ProductIntEav,ProductTextEav,ProductDecimalEav,ProductUrlEav
 from .models import Attribute,CustomAttribute,Category
-from .models import Variation
+# from .models import Variation,CustomVariation
 from .models import DefaultAttribute
 from .models import BulkProductQty
 
@@ -25,9 +25,13 @@ class CategoryAdmin(ModelAdmin):
     list_display = [field.name for field in Category._meta.fields]
 admin.site.register(Category,CategoryAdmin)
 
-class VariationAdmin(ModelAdmin):
-    list_display = [field.name for field in Variation._meta.fields]
-admin.site.register(Variation,VariationAdmin)
+# class VariationAdmin(ModelAdmin):
+#     list_display = [field.name for field in Variation._meta.fields]
+# admin.site.register(Variation,VariationAdmin)
+
+# class CustomVariationAdmin(ModelAdmin):
+#     list_display = [field.name for field in CustomVariation._meta.fields]
+# admin.site.register(CustomVariation,CustomVariationAdmin)
 
 class CustomAttributeAdmin(ModelAdmin):
     list_display = [field.name for field in CustomAttribute._meta.fields]

@@ -13,6 +13,7 @@ class UsersInline(admin.StackedInline):
 
 class UserAdmin(BaseUserAdmin):
     inlines = (UsersInline,)
+    list_display = list(set([field.name for field in User._meta.fields])-set(["password",]))
 
 admin.site.unregister(User)
 admin.site.register(User,UserAdmin)

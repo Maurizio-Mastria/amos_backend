@@ -10,12 +10,7 @@ from .models import Category,Attribute,DefaultAttribute
 # from .models import ProductConfigurableOfMultiple,ProductConfigurableOfBulk
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        exclude = 'company',
-        read_only_fields = ('attributes','custom_attributes','variations','marketplace')
-        depth=1
+
 
 class AttributeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -77,8 +72,42 @@ class ProductSimpleSerializer(serializers.ModelSerializer):
         exclude=('company',)
         read_only_fields = ('int_eav','boolean_eav','char_eav','decimal_eav','text_eav','url_eav')
         depth=1
-        
 
+
+class AbstractProductsSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductSimple
+        fields= ('id','sku')
+        depth=0
+
+class AbstractProductsBulkSerializer(serializers.ModelSerializer):
+    model = ProductBulk
+    class Meta:
+        fields= ('id','sku')
+        depth=0
+
+class AbstractProductsConfigurableSerializer(serializers.ModelSerializer):
+    model = ProductConfigurable
+    class Meta:
+        fields= ('id','sku')
+        depth=0
+
+class AbstractProductsMultipleSerializer(serializers.ModelSerializer):
+    model = ProductMultiple
+    class Meta:
+        fields= ('id','sku')
+        depth=0
+
+class CategorySerializer(serializers.ModelSerializer):
+    simple=AbstractProductsSimpleSerializer(many=True,read_only=True)
+    bulk=AbstractProductsBulkSerializer(many=True,read_only=True)
+    multiple=AbstractProductsConfigurableSerializer(many=True,read_only=True)
+    configurable=AbstractProductsMultipleSerializer(many=True,read_only=True)
+    class Meta:
+        model = Category
+        exclude = 'company',
+        read_only_fields = ('custom_attributes','variations','marketplace','simple','bulk','configurable','multiple')
+        depth=2
 class ProductMultipleSerializer(serializers.ModelSerializer):
     int_eav=ProductIntEavSerializer(many=True)
     boolean_eav=ProductBooleanEavSerializer(many=True)
