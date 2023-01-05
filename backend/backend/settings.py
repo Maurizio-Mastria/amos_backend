@@ -62,7 +62,8 @@ INSTALLED_APPS = [
     'customers',
     'buckets',
     'imports',
-    'stocks'
+    
+    'warehouses'
     
     
 ]
@@ -72,8 +73,8 @@ INSTALLED_APPS = [
 CORS_ORIGIN_ALLOW_ALL=True
 
 REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 50,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
@@ -193,12 +194,13 @@ STATIC_ROOT = env("STATIC_ROOT")
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-AUTO_LOGOUT_DELAY = 60*8 #equivalent to 5 minutes
-
+AUTO_LOGOUT_DELAY = 1
+SESSION_COOKIE_AGE = 3600 #36000 #10 ore
+SESSION_SAVE_EVERY_REQUEST = True
 APPEND_SLASH=False
 MEDIA_URL = '/media/'
 MEDIA_ROOT = join(BASE_DIR,'..','httpdocs','media')
-
+SESSION_COOKIE_SECURE = True
 DATA_UPLOAD_MAX_MEMORY_SIZE=5000000
 #FILE_UPLOAD_TEMP_DIR=join(DISK_A_PATH,"tmp")
 PUBLIC_DIR=os.path.join(DISK_A_PATH,"share")

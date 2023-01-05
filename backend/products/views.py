@@ -2,13 +2,17 @@ from django.http import JsonResponse
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework.response import Response
+from .serializers import AbstractProductsForCategorySimpleSerializer
+from .serializers import AbstractProductsForCategoryBulkSerializer
+from .serializers import AbstractProductsForCategoryMultipleSerializer
+from .serializers import AbstractProductsForCategoryConfigurableSerializer
+
 from .serializers import ProductSimpleSerializer,ProductMultipleSerializer,ProductConfigurableSerializer,ProductBulkSerializer
-from .serializers import ProductIntEavSerializer,ProductCharEavSerializer,ProductDecimalEavSerializer,ProductBooleanEavSerializer,ProductTextEavSerializer,ProductUrlEavSerializer
 from .serializers import CustomAttributeSerializer,AttributeSerializer,DefaultAttributeSerializer,CategorySerializer
 from .serializers import AbstractProductsSimpleSerializer,AbstractProductsMultipleSerializer,AbstractProductsConfigurableSerializer,AbstractProductsBulkSerializer
 from .mixins import ProductAttributeViewMixin, ProductSimpleViewMixin,CategoryViewMixin,CustomAttributeViewMixin,CategorySimplifyViewMixin
 from .mixins import ProductConfigurableViewMixin,ProductBulkViewMixin,ProductMultipleViewMixin
+from .mixins import FilterCategoryMixin
 from backend.mixins import AuthorizationMixin
 from .models import ProductSimple,ProductMultiple,ProductBulk,ProductConfigurable
 # from .models import ProductBulkOfMultiple,ProductBulkOfBulk
@@ -20,7 +24,7 @@ from .models import ProductBooleanEav,ProductCharEav,ProductIntEav,ProductTextEa
 from .models import Attribute,DefaultAttribute,CustomAttribute,Category
 from companies.models import Company
 from marketplaces.models import Marketplace
-from rest_framework.exceptions import APIException,PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from PIL import Image
 from django.core.exceptions import ObjectDoesNotExist
 import shutil
@@ -63,6 +67,15 @@ class CategorySimplifyViewSet(CategorySimplifyViewMixin,AuthorizationMixin,views
 
 categories_simplify_list = CategorySimplifyViewSet.as_view({'get':'list'})
 
+
+
+
+
+
+
+
+
+
 class ProductSimpleViewSet(ProductSimpleViewMixin,AuthorizationMixin,viewsets.ModelViewSet):
     model = ProductSimple
     permission_class = IsAuthenticated
@@ -87,6 +100,35 @@ class AbstractProductsSimpleViewSet(ProductSimpleViewMixin,AuthorizationMixin,vi
 
 abstract_product_simple_list = AbstractProductsSimpleViewSet.as_view({'get':'list'})
 
+class AbstractProductsForCategorySimpleViewSet(FilterCategoryMixin,AuthorizationMixin,viewsets.ModelViewSet):
+    model = ProductSimple
+    permission_class = IsAuthenticated
+    serializer_class = AbstractProductsForCategorySimpleSerializer
+
+abstract_product_for_category_simple_list = AbstractProductsForCategorySimpleViewSet.as_view({'get':'list'})
+
+class AbstractProductsForCategoryConfigurableViewSet(FilterCategoryMixin,AuthorizationMixin,viewsets.ModelViewSet):
+    model = ProductConfigurable
+    permission_class = IsAuthenticated
+    serializer_class = AbstractProductsForCategoryConfigurableSerializer
+
+abstract_product_for_category_configurable_list = AbstractProductsForCategoryConfigurableViewSet.as_view({'get':'list'})
+
+class AbstractProductsForCategoryMultipleViewSet(FilterCategoryMixin,AuthorizationMixin,viewsets.ModelViewSet):
+    model = ProductMultiple
+    permission_class = IsAuthenticated
+    serializer_class = AbstractProductsForCategoryMultipleSerializer
+
+abstract_product_for_category_multiple_list = AbstractProductsForCategoryMultipleViewSet.as_view({'get':'list'})
+
+
+class AbstractProductsForCategoryBulkViewSet(FilterCategoryMixin,AuthorizationMixin,viewsets.ModelViewSet):
+    model = ProductBulk
+    permission_class = IsAuthenticated
+    serializer_class = AbstractProductsForCategoryBulkSerializer
+
+abstract_product_for_category_bulk_list = AbstractProductsForCategoryBulkViewSet.as_view({'get':'list'})
+
 class AbstractProductsConfigurableViewSet(ProductConfigurableViewMixin,AuthorizationMixin,viewsets.ModelViewSet):
     model = ProductConfigurable
     permission_class = IsAuthenticated
@@ -110,6 +152,105 @@ abstract_product_bulk_list = AbstractProductsBulkViewSet.as_view({'get':'list'})
 
 
 
+
+
+
+class CategoryProductAddDelete(APIView):
+    permission_class= IsAuthenticated
+
+    def put(self,request,pk):
+        if not Company.objects.filter(pk=self.request.GET.get("company")).exists():
+            raise PermissionDenied("Permesso negato")
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        if not self.request.user.is_superuser and not self.request.user.is_staff:
+            permission=Authorization.Permissions.MODIFY
+            try:
+                if Authorization.objects.get(user=self.request.user,application="products",company=company).permission<permission:
+                    raise PermissionDenied("Permesso negato")
+            except:
+                raise PermissionDenied("Permesso negato")
+        try:
+            marketplace=Marketplace.objects.get(company=company,id=self.request.GET.get("marketplace"))
+        except:
+            raise PermissionDenied("Market non valido")
+        try:
+            category=Category.objects.get(company=company,marketplace=marketplace,id=pk)
+        except:
+            raise PermissionDenied("Market non valido")
+        source=json.loads(self.request.body)
+        products_id=source["products"]
+        products_type=source["products_type"]
+        products=None
+        if products_type=="simple":
+            products=ProductSimple.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.simple.add(product)
+            category.save()
+        elif products_type=="configurable":
+            products=ProductConfigurable.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.configurable.add(product)
+            category.save()
+        elif products_type=="multiple":
+            products=ProductMultiple.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.multiple.add(product)
+            category.save()
+        elif products_type=="bulk":
+            products=ProductBulk.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.bulk.add(product)
+            category.save()
+        else:
+            raise PermissionDenied("Prodotti non validi")
+        return JsonResponse({"response":"Prodotti aggiunti"})
+    
+    def delete(self,request,pk):
+        if not Company.objects.filter(pk=self.request.GET.get("company")).exists():
+            raise PermissionDenied("Permesso negato")
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        if not self.request.user.is_superuser and not self.request.user.is_staff:
+            permission=Authorization.Permissions.MODIFY
+            try:
+                if Authorization.objects.get(user=self.request.user,application="products",company=company).permission<permission:
+                    raise PermissionDenied("Permesso negato")
+            except:
+                raise PermissionDenied("Permesso negato")
+        try:
+            marketplace=Marketplace.objects.get(company=company,id=self.request.GET.get("marketplace"))
+        except:
+            raise PermissionDenied("Market non valido")
+        try:
+            category=Category.objects.get(company=company,marketplace=marketplace,id=pk)
+        except:
+            raise PermissionDenied("Market non valido")
+        source=json.loads(self.request.body)
+        products_id=source["products"]
+        products_type=source["products_type"]
+        products=None
+        if products_type=="simple":
+            products=ProductSimple.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.simple.remove(product)
+            category.save()
+        elif products_type=="configurable":
+            products=ProductConfigurable.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.configurable.remove(product)
+            category.save()
+        elif products_type=="multiple":
+            products=ProductMultiple.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.multiple.remove(product)
+            category.save()
+        elif products_type=="bulk":
+            products=ProductBulk.objects.filter(id__in=products_id,company=company,marketplace=marketplace)
+            for product in products:
+                category.bulk.remove(product)
+            category.save()
+        else:
+            raise PermissionDenied("Prodotti non validi")
+        return JsonResponse({"response":"Prodotti eliminati"})
 
 class CopyFromSimple(APIView):
     permission_class= IsAuthenticated
@@ -407,18 +548,18 @@ class CopyToSimple(APIView):
         sourceMarketplace=Marketplace.objects.get(company=company,id=self.request.GET.get("marketplace"))
 
         destination=json.loads(self.request.body)
-        print(destination)
+        
         overwriteifnull=destination["overwrite"]
         for field in destination["fields"]:
             if field not in ["title","description","short_description","keywords","bullet_point","brand","images"]:
                 raise PermissionDenied("Campo non valido! ["+str(field)+"]")
 
         
-        for market in destination["marketplace"]:
-            try:
-                Marketplace.objects.get(company=company,id=market)
-            except:
-                raise PermissionDenied("Market di destinazione non valido")
+        
+        try:
+            Marketplace.objects.get(company=company,id=destination["marketplace"])
+        except:
+            raise PermissionDenied("Market di destinazione non valido")
         
 
         for product in destination["products"]["simple"]:
@@ -511,90 +652,89 @@ class CopyToSimple(APIView):
             destinationProducts.append(ProductMultiple.objects.get(id=product_id,company=company))
         for product_id in destination["products"]["configurable"]:
             destinationProducts.append(ProductConfigurable.objects.get(id=product_id,company=company))
-        for market_id in destination["marketplace"]:
-            destinationMarketplace=Marketplace.objects.get(id=market_id,company=company)
-            for product in destinationProducts:
-                for name,value in data.items():
-                    
-                    attribute_type=DefaultAttribute.objects.get(name=name).type
-                    if attribute_type == "CHAR":
-                        try:
-                            attribute=product.char_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
-                            if value is None:
-                                attribute.delete()
-                            else:
-                                attribute.value=data[name]
-                        except ObjectDoesNotExist:
-                            if value is not None:
-                                attribute=ProductCharEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
-                                attribute.save()
-                                product.char_eav.add(attribute)
-                                product.save()
-                    elif attribute_type == "TEXT":
-                        try:
-                            attribute=product.text_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
-                            if value is None:
-                                attribute.delete()
-                            else:
-                                attribute.value=data[name]
-                        except ObjectDoesNotExist:
-                            if value is not None:
-                                attribute=ProductTextEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
-                                attribute.save()
-                                product.text_eav.add(attribute)
-                                product.save()
-                    elif attribute_type == "URL":
-                        try:
-                            attribute=product.url_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
-                            if value is None:
-                                attribute.delete()
-                            else:
-                                attribute.value=data[name]
-                        except ObjectDoesNotExist:
-                            if value is not None:
-                                attribute=ProductUrlEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
-                                attribute.save()
-                                product.url_eav.add(attribute)
-                                product.save()
-                    elif attribute_type == "BOOLEAN":
-                        try:
-                            attribute=product.boolean_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
-                            if value is None:
-                                attribute.delete()
-                            else:
-                                attribute.value=data[name]
-                        except ObjectDoesNotExist:
-                            if value is not None:
-                                attribute=ProductBooleanEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
-                                attribute.save()
-                                product.boolean_eav.add(attribute)
-                                product.save()
-                    elif attribute_type == "INT":
-                        try:
-                            attribute=product.int_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
-                            if value is None:
-                                attribute.delete()
-                            else:
-                                attribute.value=data[name]
-                        except ObjectDoesNotExist:
-                            if value is not None:
-                                attribute=ProductIntEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
-                                attribute.save()
-                                product.int_eav.add(attribute)
-                                product.save()
-                    elif attribute_type == "DECIMAL":
-                        try:
-                            attribute=product.decimal_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
-                            if value is None:
-                                attribute.delete()
-                            else:
-                                attribute.value=data[name]
-                        except ObjectDoesNotExist:
-                            if value is not None:
-                                attribute=ProductDecimalEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
-                                attribute.save()
-                                product.decimal_eav.add(attribute)
-                                product.save()
+        destinationMarketplace=Marketplace.objects.get(id=destination["marketplace"],company=company)
+        for product in destinationProducts:
+            for name,value in data.items():
+                
+                attribute_type=DefaultAttribute.objects.get(name=name).type
+                if attribute_type == "CHAR":
+                    try:
+                        attribute=product.char_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
+                        if value is None:
+                            attribute.delete()
+                        else:
+                            attribute.value=data[name]
+                    except ObjectDoesNotExist:
+                        if value is not None:
+                            attribute=ProductCharEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
+                            attribute.save()
+                            product.char_eav.add(attribute)
+                            product.save()
+                elif attribute_type == "TEXT":
+                    try:
+                        attribute=product.text_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
+                        if value is None:
+                            attribute.delete()
+                        else:
+                            attribute.value=data[name]
+                    except ObjectDoesNotExist:
+                        if value is not None:
+                            attribute=ProductTextEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
+                            attribute.save()
+                            product.text_eav.add(attribute)
+                            product.save()
+                elif attribute_type == "URL":
+                    try:
+                        attribute=product.url_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
+                        if value is None:
+                            attribute.delete()
+                        else:
+                            attribute.value=data[name]
+                    except ObjectDoesNotExist:
+                        if value is not None:
+                            attribute=ProductUrlEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
+                            attribute.save()
+                            product.url_eav.add(attribute)
+                            product.save()
+                elif attribute_type == "BOOLEAN":
+                    try:
+                        attribute=product.boolean_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
+                        if value is None:
+                            attribute.delete()
+                        else:
+                            attribute.value=data[name]
+                    except ObjectDoesNotExist:
+                        if value is not None:
+                            attribute=ProductBooleanEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
+                            attribute.save()
+                            product.boolean_eav.add(attribute)
+                            product.save()
+                elif attribute_type == "INT":
+                    try:
+                        attribute=product.int_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
+                        if value is None:
+                            attribute.delete()
+                        else:
+                            attribute.value=data[name]
+                    except ObjectDoesNotExist:
+                        if value is not None:
+                            attribute=ProductIntEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
+                            attribute.save()
+                            product.int_eav.add(attribute)
+                            product.save()
+                elif attribute_type == "DECIMAL":
+                    try:
+                        attribute=product.decimal_eav.get(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name)
+                        if value is None:
+                            attribute.delete()
+                        else:
+                            attribute.value=data[name]
+                    except ObjectDoesNotExist:
+                        if value is not None:
+                            attribute=ProductDecimalEav(sku=product.sku,company=company,marketplace=destinationMarketplace,attribute=name,value=value)
+                            attribute.save()
+                            product.decimal_eav.add(attribute)
+                            product.save()
 
         return JsonResponse({"content":"OK"})
 

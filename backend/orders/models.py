@@ -5,15 +5,17 @@ from django.utils import timezone
 from backend import globals
 from customers.models import Customer
 from products.models import ProductBulk,ProductSimple,ProductMultiple
-from stocks.models import StockBulkProduct,StockMultipleProduct,StockSimpleProduct
 from phonenumber_field.modelfields import PhoneNumberField
+from warehouses.views import update_InStockQty
 # Create your models here.
 
 
 class OrderDetail(models.Model):
     sku=models.CharField(max_length=globals.SKU_LENGTH,verbose_name="SKU prodotto")
+    product_type=models.CharField(max_length=2,choices=[("S","Simple"),("B","Bulk"),("M","Multiple")])
+    product_id=models.PositiveIntegerField(default=0)
     qty=models.PositiveIntegerField(verbose_name="Quantità acquistata")
-    title=models.CharField(max_length=50,null=True,verbose_name='Titolo prodotto')
+    title=models.CharField(max_length=200,null=True,verbose_name='Titolo prodotto')
     company=models.ForeignKey(Company,on_delete=models.CASCADE,null=True)
     marketplace=models.ForeignKey(Marketplace,on_delete=models.CASCADE,null=True)
     price=models.DecimalField(max_digits=8,decimal_places=2,verbose_name="Prezzo articolo")
@@ -35,32 +37,37 @@ class OrderDetail(models.Model):
     shipping_cap=models.CharField(max_length=5,blank=True,null=True,verbose_name="CAP di destinazione")
     shipping_country=models.CharField(max_length=20,verbose_name="Nazione di destinazione")
     shipping_state=models.CharField(max_length=20,verbose_name="Provincia di destinazione",null=True)
-    shipping_instructions=models.CharField(max_length=200)
+    shipping_instructions=models.CharField(max_length=200,blank=True,null=True)
     
     def save(self,*args,**kwargs):
         if len(self.title)>80:
-            self.title=str(self.title)[:50]
+            self.title=str(self.title)[:200]
 
         if self.id is None:
             qty=self.qty
         else:
             qty=self.qty-OrderDetail.objects.get(sku=self.sku,company=self.company,marketplace=self.marketplace,order_id=self.order_id,order_item_id=self.order_item_id).qty
-        if ProductSimple.objects.filter(company=self.company,sku=self.sku).exists():
-            product=ProductSimple.objects.get(company=self.company,sku=self.sku)
-            simpleProductStock=StockSimpleProduct.objects.get(company=product.company,product=product)
-            simpleProductStock.qty-=qty
-            simpleProductStock.save()
-        elif ProductBulk.objects.filter(company=self.company,sku=self.sku).exists():
-            product=ProductBulk.objects.get(company=self.company,sku=self.sku)
+        if ProductSimple.objects.filter(company=self.company,sku=self.sku,marketplace=self.marketplace).exists():
+            product=ProductSimple.objects.get(company=self.company,sku=self.sku,marketplace=self.marketplace)
+            self.product_id=product.id
+            self.product_type="S"
+            update_InStockQty(product.item,product.item.inStockQty-qty)
+            
+        elif ProductBulk.objects.filter(company=self.company,sku=self.sku,marketplace=self.marketplace).exists():
+            product=ProductBulk.objects.get(company=self.company,sku=self.sku,marketplace=self.marketplace)
+            self.product_id=product.id
+            self.product_type="B"
             for product_qty in product.bulk_products_qty.all():
-                simpleProductStock=StockSimpleProduct.objects.get(company=product.company,product=product_qty.product)
-                simpleProductStock.qty-=(qty*product_qty.qty)
-                simpleProductStock.save()
-        elif ProductMultiple.objects.filter(company=self.company,sku=self.sku).exists():
-            product=ProductMultiple.objects.get(company=self.company,sku=self.sku)
-            simpleProductStock=StockSimpleProduct.objects.get(company=product.company,product=product.product)
-            simpleProductStock.qty-=(qty*product.qty)
-            simpleProductStock.save()
+                newQty=product_qty.product.item.inStockQty-(qty*product_qty.qty)
+                update_InStockQty(product.item,newQty)
+                   
+        elif ProductMultiple.objects.filter(company=self.company,sku=self.sku,marketplace=self.marketplace).exists():
+            product=ProductMultiple.objects.get(company=self.company,sku=self.sku,marketplace=self.marketplace)
+            self.product_id=product.id
+            self.product_type="M"
+            newQty=product.product.item.inStockQty-(qty*product.qty)
+            update_InStockQty(product.item,newQty)
+            
         super(OrderDetail,self).save(*args,*kwargs)
 
 

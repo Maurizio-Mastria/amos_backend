@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from .models import CustomAttribute, ProductSimple,ProductMultiple,ProductBulk,ProductConfigurable
 from .models import ProductBooleanEav,ProductCharEav,ProductIntEav,ProductTextEav,ProductDecimalEav,ProductUrlEav
-from .models import Category,Attribute,DefaultAttribute
+from .models import Category,Attribute,BulkProductQty
 
 # from .models import ProductBulkOfMultiple,ProductBulkOfBulk
 # from .models import ProductMultipleOfBulk,ProductMultipleOfMultiple
@@ -77,25 +77,49 @@ class ProductSimpleSerializer(serializers.ModelSerializer):
 class AbstractProductsSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSimple
-        fields= ('id','sku')
+        fields= ('id','sku','item')
+        depth=0
+
+class AbstractProductsForCategorySimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductSimple
+        fields= ('id','sku','item')
+        depth=0
+
+class AbstractProductsForCategoryMultipleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductMultiple
+        fields= ('id','sku',)
+        depth=0
+
+class AbstractProductsForCategoryConfigurableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductConfigurable
+        fields= ('id','sku',)
+        depth=0
+
+class AbstractProductsForCategoryBulkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductBulk
+        fields= ('id','sku',)
         depth=0
 
 class AbstractProductsBulkSerializer(serializers.ModelSerializer):
-    model = ProductBulk
     class Meta:
+        model = ProductBulk
         fields= ('id','sku')
         depth=0
 
 class AbstractProductsConfigurableSerializer(serializers.ModelSerializer):
-    model = ProductConfigurable
     class Meta:
-        fields= ('id','sku')
+        model = ProductConfigurable
+        fields= ('id','sku',)
         depth=0
 
 class AbstractProductsMultipleSerializer(serializers.ModelSerializer):
-    model = ProductMultiple
     class Meta:
-        fields= ('id','sku')
+        model = ProductMultiple
+        fields= ('id','sku',)
         depth=0
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -109,40 +133,36 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ('custom_attributes','variations','marketplace','simple','bulk','configurable','multiple')
         depth=2
 class ProductMultipleSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
+    
     class Meta:
         model = ProductMultiple
         exclude = ('company',)
         read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+        depth=1
+
+class BulkProductsQtySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BulkProductQty
+        exclude = ('company',)
+        depth=1
+
+
 
 class ProductBulkSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
+    bulk_products_qty=BulkProductsQtySerializer(many=True,read_only=True)
     class Meta:
         model = ProductBulk
         exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+        read_only_fields = ('int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav','bulk_products_qty')
+        depth=1
 
 class ProductConfigurableSerializer(serializers.ModelSerializer):
-    int_eav=ProductIntEavSerializer(many=True)
-    boolean_eav=ProductBooleanEavSerializer(many=True)
-    char_eav=ProductCharEavSerializer(many=True)
-    decimal_eav=ProductDecimalEavSerializer(many=True)
-    text_eav=ProductTextEavSerializer(many=True)
-    url_eav=ProductUrlEavSerializer(many=True)
+    
     class Meta:
         model = ProductConfigurable
         exclude = ('company',)
-        read_only_fields = ('id','int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav')
+        read_only_fields = ('int_eav','char_eav','text_eav','decimal_eav','boolean_eav','url_eav','variations','products')
+        depth=1
 
 
 # class ProductBulkOfMultipleSerializer(serializers.ModelSerializer):

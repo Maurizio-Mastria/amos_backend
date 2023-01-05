@@ -50,6 +50,8 @@ class Authorization(models.Model):
         AUTHORIZATIONS="authorizations"
         IMPORTS="imports"
         OFFERS="offers"
+        ITEM="warehouse_item"
+        WAREHOUSES="warehouses"
 
         
     company=models.ForeignKey(Company,on_delete=models.CASCADE)

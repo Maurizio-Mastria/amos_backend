@@ -17,7 +17,6 @@ import pytz
 from django.template.loader import render_to_string
 from suds.cache import NoCache
 import requests
-from shippings.models import Distinta
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.pdfgen import canvas
 import xml.etree.ElementTree as ET
@@ -25,8 +24,9 @@ import xml.etree.ElementTree as ET
 
 class GLS:
     def create(order,courier):
-        xml=render_to_string(os.path.join('gls','parcel.xml'), {'order': order,"courier":courier})
-        pass
+        #return xml to send
+        return render_to_string(os.path.join('gls','parcel.xml'), {'order': order,"courier":courier})
+        
 
     def process(shippings):
         pass
@@ -164,11 +164,15 @@ class GLS:
         distintaObj.save()
         return { "result" : True, "message" : errors }
 
-class Shipping():
+class ShippingInterface():
 
-    def create(order,courier):
-        if courier.name == "GLS":
+    def __init__(self,shipping):
+        self.shipping=shipping
+
+    def create():
+        if self.shipping.courier.name == "GLS":
             obj=GLS()
+            obj.xml
             try:
                 return obj.create(order,courier)
             except:
@@ -231,35 +235,12 @@ class Shipping():
 
 
 
-def errorCheck(xmlroot):
-
-    if xmlroot.find('consignment/reference') is None:
-        return "Manca il ddt"
-    
-    if ((xmlroot.find('consignment/codfvalue') not in [None,""] or xmlroot.find('consignment/codfcurrency') not in [None,""]) and xmlroot.find('consignment[@cashondelivery]') in ["N","n",None,""]) or \
-    ((xmlroot.find('consignment/codfvalue') in [None,""] or xmlroot.find('consignment/codfcurrency') in [None,""]) and xmlroot.find('consignment[@cashondelivery]') in ["Y"]):
-        return "Errori riguardanti il contrassegno"
-    return None        
 
 def uni(data):
     return unidecode.unidecode(data)
+
 def reblank(data):
     return re.sub(r'[^.a-zA-Z0-9]', " ", data)
-
-def fillStr(data, length, fill_with=' ', direction='l2r'):
-    data = str(data).strip()
-    if len(data) > length:                                                     
-        if direction == 'r2l':                                  
-            return data[-length:]                                              
-        else:                                                                  
-            return data[:length]                                                                                                                          
-    if len(data) == length:                                                    
-        return data                                                            
-                                                                                
-    if direction == 'l2r':                                      
-        return data.ljust(length, fill_with)                                   
-    else:                                                                      
-        return data.rjust(length, fill_with)
 
 def delAccent(data):
     if "à" in data:
@@ -527,7 +508,7 @@ class PdfDistintaGLS:
         cv = canvas.Canvas(filepath, pagesize=landscape(letter))
         cv.setLineWidth(.3)
         cv.setFont('Helvetica', 6)
-        cv.drawString(self.col_date + 650, self.start_document + 3, 'Corrieri Web Service © Copyright 2021')
+        cv.drawString(self.col_date + 650, self.start_document + 3, 'Nevix Cloud - Web Services  © Copyright 2023')
         cv.setFont('Helvetica', 18)
         cv.drawString(self.col_date + 190, self.start_document - 20, 'Distinta spedizioni ' + self.corriere + ' :: ' + datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
         cv.setFont('Helvetica', 15)

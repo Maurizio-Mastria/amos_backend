@@ -20,12 +20,14 @@ from backend.mixins import AuthorizationMixin
 from django.db.models import Q
 from rest_framework import serializers
 from .serializers import ProductIntEavSerializer,ProductCharEavSerializer,ProductDecimalEavSerializer,ProductBooleanEavSerializer,ProductTextEavSerializer,ProductUrlEavSerializer
-from .models import Category,CustomAttribute,Attribute,DefaultAttribute
+from .models import Category,CustomAttribute,Attribute,DefaultAttribute,BulkProductQty
 from .models import ProductSimple,ProductConfigurable,ProductMultiple,ProductBulk
 from .models import ProductCharEav,ProductBooleanEav,ProductIntEav,ProductDecimalEav,ProductTextEav,ProductUrlEav
 from django.core import serializers
 from django.http import JsonResponse
-from stocks.models import StockBulkProduct,StockMultipleProduct,StockSimpleProduct
+from warehouses.models import Item
+from warehouses.views import update_InStockQty
+# from stocks.models import StockBulkProduct,StockMultipleProduct,StockSimpleProduct
 from django.core.exceptions import ObjectDoesNotExist
 
 class CustomAttributeViewMixin(object):
@@ -34,10 +36,32 @@ class CustomAttributeViewMixin(object):
         return queryset.order_by("id")
 
     def perform_create(self,serializer):
-        company=Company.objects.get(id=self.request.GET.get("company"))
-        if serializer.is_valid():
-            serializer.validated_data["company"]=company
-            serializer.save()
+        try:
+            company=Company.objects.get(id=self.request.GET.get("company"))
+            marketplace=Marketplace.objects.get(company=company,id=self.request.GET.get("marketplace"))
+            
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                if serializer.validated_data["marketplace"]==marketplace.id:
+                    serializer.save()
+                else:
+                    raise PermissionDenied("Errore nel creare l'attributo. Marketplace non valido")    
+        except:
+            raise PermissionDenied("Errore nel creare l'attributo")
+
+    def perform_update(self,serializer):
+        try:
+            company=Company.objects.get(id=self.request.GET.get("company"))
+            marketplace=Marketplace.objects.get(company=company,id=self.request.GET.get("marketplace"))
+            
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                if serializer.validated_data["marketplace"]==marketplace.id:
+                    serializer.save()
+                else:
+                    raise PermissionDenied("Errore aggiornamento attributo. Marketplace non valido")    
+        except:
+            raise PermissionDenied("Errore aggiornamento attributo")
 
 class CategoryViewMixin(object):
 
@@ -57,13 +81,11 @@ class CategoryViewMixin(object):
     def perform_create(self,serializer):
         company=Company.objects.get(id=self.request.GET.get("company"))
         marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
-        otherMarketplaces=Marketplace.objects.filter(account=marketplace.account,code=marketplace.code,company=marketplace.company).exclude(id=marketplace.id)
-        otherParents=None
+        
         parent=None
         if serializer.initial_data["parent"] is not None:
             if Category.objects.filter(company=company,marketplace=marketplace,id=serializer.initial_data["parent"]).exists():
                 parent=Category.objects.get(company=company,marketplace=marketplace,id=serializer.initial_data["parent"])
-                otherParents=Category.objects.filter(company=parent.company,marketplace__code=parent.marketplace.code,marketplace__account=parent.marketplace.account).exclude(id=parent.id)
             
         try:
             if serializer.is_valid():
@@ -71,19 +93,6 @@ class CategoryViewMixin(object):
                 serializer.validated_data["marketplace"]=marketplace
                 serializer.validated_data["parent"]=parent
                 serializer.save()
-                for market in otherMarketplaces:
-                    data={}
-                    data["title"]=serializer.initial_data["title"]
-                    data["name"]=serializer.initial_data["name"]
-                    newSerializer=CategorySerializer(data=data)
-                    if newSerializer.is_valid():
-                        newSerializer.validated_data["company"]=company
-                        newSerializer.validated_data["marketplace"]=market
-                        if otherParents is not None:
-                            newSerializer.validated_data["parent"]=Category.objects.get(id=otherParents.get(marketplace=market).id,company=company)
-                        else:
-                            newSerializer.validated_data["parent"]=None
-                        newSerializer.save()
             else:
                 raise APIException(detail="Errore!")
         except IntegrityError:
@@ -92,120 +101,74 @@ class CategoryViewMixin(object):
     def perform_update(self,serializer):
         company=Company.objects.get(id=self.request.GET.get("company"))
         marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
-        otherMarketplaces=Marketplace.objects.filter(account=marketplace.account,code=marketplace.code,company=marketplace.company).exclude(id=marketplace.id)
-        otherParents=None
-        newData={}
         
-        for market in otherMarketplaces:
-            newData[market]={}
         
         if "parent" in serializer.initial_data:
             if serializer.initial_data["parent"] is not None:
                 try:
                     parent=Category.objects.get(company=company,marketplace=marketplace,id=serializer.initial_data["parent"])
                     serializer.validated_data["parent"]=parent
-                    otherParents=Category.objects.filter(company=parent.company,marketplace__code=parent.marketplace.code,marketplace__account=parent.marketplace.account,name=parent.name).exclude(id=parent.id)
-                    for oParent in otherParents:
-                        newData[oParent.marketplace]["parent"]=oParent
                 except:
                     raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
             else:
                 serializer.validated_data["parent"]=None
-                for market in otherMarketplaces:
-                    newData[market]["parent"]=None
         if "attributes" in serializer.initial_data:
             serializer.validated_data["attributes"]=serializer.initial_data["attributes"]
-            for market in otherMarketplaces:
-                newData[market]["attributes"]=serializer.initial_data["attributes"]
         if "custom_attributes" in serializer.initial_data:
             serializer.validated_data["custom_attributes"]=serializer.initial_data["custom_attributes"]
-            for market in otherMarketplaces:
-                newData[market]["custom_attributes"]=serializer.initial_data["custom_attributes"]
 
         if "variations" in serializer.initial_data:
             serializer.validated_data["variations"]=serializer.initial_data["variations"]
-            for market in otherMarketplaces:
-                newData[market]["variations"]=serializer.initial_data["variations"]
 
         if "custom_variations" in serializer.initial_data:
             serializer.validated_data["custom_variations"]=serializer.initial_data["custom_variations"]
-            for market in otherMarketplaces:
-                newData[market]["custom_variations"]=serializer.initial_data["custom_variations"]
 
         if "_simple" in serializer.initial_data:
             if len(serializer.initial_data["_simple"]) is not None:
                 try:
                     simple=ProductSimple.objects.filter(company=company,id__in=serializer.initial_data["_simple"])
                     serializer.validated_data["simple"]=simple
-                    for market in otherMarketplaces:
-                        newData[market]["simple"]=simple
                 except:
                     raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
             else:
                 serializer.validated_data["simple"]=None
-                for market in otherMarketplaces:
-                    newData[market]["simple"]=None
 
         if "_configurable" in serializer.initial_data:
             if len(serializer.initial_data["_configurable"]) is not None:
                 try:
                     configurable=ProductConfigurable.objects.filter(company=company,id__in=serializer.initial_data["_configurable"])
+                    
+
                     serializer.validated_data["configurable"]=configurable
-                    for market in otherMarketplaces:
-                        newData[market]["configurable"]=configurable
+                    # se sto salvando il configurabile, questo deve stare nella stessa categoria di tutti i suoi figli
+
                 except:
                     raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
             else:
                 serializer.validated_data["configurable"]=None
-                for market in otherMarketplaces:
-                    newData[market]["configurable"]=None
 
         if "_bulk" in serializer.initial_data:
             if len(serializer.initial_data["_bulk"]) is not None:
                 try:
                     bulk=ProductBulk.objects.filter(company=company,id__in=serializer.initial_data["_bulk"])
                     serializer.validated_data["bulk"]=bulk
-                    for market in otherMarketplaces:
-                        newData[market]["bulk"]=bulk
                 except:
                     raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
             else:
                 serializer.validated_data["bulk"]=None
-                for market in otherMarketplaces:
-                    newData[market]["bulk"]=None
         if "_multiple" in serializer.initial_data:
             if len(serializer.initial_data["_multiple"]) is not None:
                 try:
                     multiple=ProductMultiple.objects.filter(company=company,id__in=serializer.initial_data["_multiple"])
                     serializer.validated_data["multiple"]=multiple
-                    for market in otherMarketplaces:
-                        newData[market]["multiple"]=multiple
                 except:
                     raise PermissionDenied(detail="%s errore nell'aggiornamento" % (self.model._meta.verbose_name))
             else:
                 serializer.validated_data["multiple"]=None
-                for market in otherMarketplaces:
-                    newData[market]["multiple"]=None
         
         try:
             if serializer.is_valid():
-                thisCategory=Category.objects.get(company=company,marketplace=marketplace,id=serializer.instance.id)
-                saved=serializer.save()
-                otherCategories=Category.objects.filter(company=company,marketplace__in=otherMarketplaces,name=thisCategory.name).exclude(id=thisCategory.id)
-                for market,data in newData.items():
-                    print(data)
-                    category=otherCategories.get(company=company,marketplace=market)
-                    if "title" not in data:
-                        data["title"]=saved.title
-                    if "name" not in data:
-                        data["name"]=saved.name
-                    newSerializer=CategorySerializer(instance=category,data=data)
-                    if newSerializer.is_valid():
-                        for key,value in data.items():
-                            newSerializer.validated_data[key]=value
-                        newSerializer.save()
-                    else:
-                        raise APIException(detail=newSerializer.errors)
+                serializer.save()
             else:
                 raise APIException(detail="Errore!")
         except IntegrityError:
@@ -293,20 +256,34 @@ class ProductAttributeViewMixin(object):
         queryset=super().get_queryset("products")
         return queryset.order_by("id")
 
+
+class FilterCategoryMixin(object):
+
+    def get_queryset(self):
+        queryset=super().get_queryset("products")
+        queryset=queryset.filter(marketplace=self.request.GET.get("marketplace"))
+        id_products=set()
+        for category in Category.objects.filter(company=self.request.GET.get("company"),marketplace=self.request.GET.get("marketplace")).exclude(id=self.request.GET.get("category")):
+            id_products.add(category.simple.all().values_list("id",flat=True))
+        queryset=queryset.exclude(id__in=list(id_products)).order_by("id").distinct()
+        return queryset
+
+        
+
+                
 class ProductSimpleViewMixin(object):
 
     def get_queryset(self):
         queryset=super().get_queryset("products")
+        marketplace=self.request.GET.get("marketplace")
+        queryset=queryset.filter(marketplace=marketplace)
         search=None
         if self.request.GET.get("search"):
             search=self.request.GET.get("search")
-            marketplace=self.request.GET.get("marketplace")
             queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
-                |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
-                |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
+                |queryset.filter(char_eav__value__icontains=search)\
+                |queryset.filter(text_eav__value__icontains=search)
             return queryset.order_by("id").distinct()
-                
-
         return queryset.order_by("id")
 
 
@@ -315,23 +292,19 @@ class ProductSimpleViewMixin(object):
 
     def perform_create(self,serializer):
         company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
         try:
             if serializer.is_valid():
                 serializer.validated_data["company"]=company
+                serializer.validated_data["marketplace"]=marketplace
                 serializer.save()
-                id=serializer.data["id"]
-                stock=StockSimpleProduct(company=company,product=ProductSimple.objects.get(id=id,company=company),qty=0)
-                stock.save()
-            else:
-                raise APIException(detail="Errore!")
         except IntegrityError:
-            raise PermissionDenied(detail="%s errore nella creazione" % (self.model._meta.verbose_name))
+            raise PermissionDenied(detail="Lo SKU %s esiste già in questo marketplace" % (serializer.validated_data["sku"]))
                 
     def perform_update(self,serializer):
         
         company=Company.objects.get(id=self.request.GET.get("company"))
         marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
-        simple=ProductSimple.objects.get(company=company,sku=serializer.validated_data["sku"])
         
         eav_type_objs={}
         for val in ["INT","DECIMAL","BOOLEAN","URL","TEXT","CHAR"]:
@@ -359,7 +332,6 @@ class ProductSimpleViewMixin(object):
                             obj=ProductDecimalEav.objects.get(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute)
                             obj.value=value["value"]
                             obj.unit=value["unit"]
-                            print(obj.unit)
                         except ProductDecimalEav.DoesNotExist:
                             obj=ProductDecimalEav(company=company,marketplace=marketplace,sku=serializer.validated_data["sku"],attribute=attribute,value=value["value"],unit=value["unit"])
                         data=json.loads(serializers.serialize("json",[obj,]))
@@ -451,6 +423,12 @@ class ProductSimpleViewMixin(object):
                             productObj.text_eav.add(eav_obj)
                         elif eav_type=="CHAR" and eav_obj not in productObj.char_eav.all():
                             productObj.char_eav.add(eav_obj)
+                if "item" in serializer.initial_data:
+                    itemObj=Item.objects.get(id=serializer.initial_data["item"]["id"],company=company)
+                    productObj.item=itemObj
+                    productObj.save()
+                    update_InStockQty(productObj.item,productObj.item.inStockQty)
+                
             else:
                 raise APIException(detail="Errore!")
         except IntegrityError:
@@ -478,42 +456,163 @@ class ProductConfigurableViewMixin(object):
 
     def get_queryset(self):
         queryset=super().get_queryset("products")
+        marketplace=self.request.GET.get("marketplace")
+        queryset=queryset.filter(marketplace=marketplace)
+
         search=None
         if self.request.GET.get("search"):
             search=self.request.GET.get("search")
-            marketplace=self.request.GET.get("marketplace")
             queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
                 |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
                 |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
             return queryset.order_by("id").distinct()
-                
-
         return queryset.order_by("id")
+
+    def perform_create(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        try:
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                serializer.validated_data["marketplace"]=marketplace
+                serializer.save()
+                productConfigurableObj=ProductConfigurable.objects.get(id=serializer.data["id"])
+                productConfigurableObj.save()
+                for attribute in Attribute.objects.filter(id__in=serializer.initial_data["variations"]):
+                    productConfigurableObj.variations.add(attribute)
+                for simple in ProductSimple.objects.filter(id__in=serializer.initial_data["products"],company=company,marketplace=marketplace):
+                    productConfigurableObj.products.add(simple)
+                productConfigurableObj.save()
+        except IntegrityError:
+            raise PermissionDenied(detail="Lo SKU %s esiste già in questo marketplace" % (serializer.validated_data["sku"]))
+
+
+    def perform_update(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        try:
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                serializer.validated_data["marketplace"]=marketplace
+                serializer.save()
+                productConfigurableObj=ProductConfigurable.objects.get(id=serializer.data["id"])
+                for attribute in Attribute.objects.filter(id__in=serializer.initial_data["variations"]):
+                    productConfigurableObj.variations.add(attribute)
+                for simple in ProductSimple.objects.filter(id__in=serializer.initial_data["products"],company=company,marketplace=marketplace):
+                    productConfigurableObj.products.add(simple)
+                productConfigurableObj.save()
+                for variation in productConfigurableObj.variations.all():
+                    if variation.id not in serializer.initial_data["variations"]:
+                        productConfigurableObj.variations.remove(variation)
+                for simple in productConfigurableObj.products.all():
+                    if simple.id not in serializer.initial_data["products"]:
+                        productConfigurableObj.products.remove(simple)
+                productConfigurableObj.save()
+        except IntegrityError:
+            raise PermissionDenied(detail="Lo SKU %s esiste già in questo marketplace" % (serializer.validated_data["sku"]))
+        
 
 class ProductBulkViewMixin(object):
 
     def get_queryset(self):
         queryset=super().get_queryset("products")
+        marketplace=self.request.GET.get("marketplace")
+        queryset=queryset.filter(marketplace=marketplace)
+
         search=None
         if self.request.GET.get("search"):
             search=self.request.GET.get("search")
-            marketplace=self.request.GET.get("marketplace")
             queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
                 |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
                 |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
             return queryset.order_by("id").distinct()
-                
-
         return queryset.order_by("id")
+
+
+    def perform_create(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        try:
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                serializer.validated_data["marketplace"]=marketplace
+                bulkAssociations=[]
+                for child in serializer.initial_data["childs"]:
+                    bulkproductqtyObj=BulkProductQty(company=company,marketplace=marketplace,bulk_sku=serializer.validated_data["sku"])
+                    bulkproductqtyObj.product=ProductSimple.objects.get(company=company,marketplace=marketplace,id=child["id"])
+                    bulkproductqtyObj.qty=child["qty"]
+                    try:
+                        bulkproductqtyObj.save()
+                        bulkAssociations.append(bulkproductqtyObj)
+                    except:
+                        for obj in bulkAssociations:
+                            obj.delete()
+                        raise APIException(detail="Errore nel creare l'associazione bulk/semplice")
+                
+                serializer.save()
+                obj=ProductBulk.objects.get(id=serializer.data["id"],company=company,marketplace=marketplace)
+                for objass in bulkAssociations:
+                    obj.bulk_products_qty.add(objass)
+                obj.save()
+            else:
+                raise APIException(detail="Invalido!")
+        except IntegrityError:
+            raise PermissionDenied(detail="Lo SKU %s esiste già in questo marketplace" % (serializer.validated_data["sku"]))
+
+    def perform_update(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        try:
+            
+            if serializer.is_valid():
+                serializer.save()
+                bulk=ProductBulk.objects.get(id=serializer.instance.id,company=company,marketplace=marketplace)
+                bulkAssociations=[]
+                
+                for child in serializer.initial_data["childs"]:
+                    print(child["id"])
+                    product=ProductSimple.objects.get(company=company,marketplace=marketplace,id=child["id"])
+                    if bulk.bulk_products_qty.filter(product=product).exists():
+                        bulkproductqtyObj=bulk.bulk_products_qty.get(product=product)
+                        bulkproductqtyObj.qty=child["qty"]
+                        bulkproductqtyObj.save()
+                    else:
+                        bulkproductqtyObj=BulkProductQty(company=company,marketplace=marketplace,bulk_sku=serializer.validated_data["sku"],product=product)
+                        bulkproductqtyObj.qty=child["qty"]
+                        try:
+                            bulkproductqtyObj.save()
+                            bulkAssociations.append(bulkproductqtyObj)
+                        except:
+                            for obj in bulkAssociations:
+                                obj.delete()
+                            raise APIException(detail="Errore nel creare l'associazione bulk/semplice")
+                
+                for objass in bulkAssociations:
+                    bulk.bulk_products_qty.add(objass)
+                bulk.save()
+
+                products_child_ids=[]
+                for child in serializer.initial_data["childs"]:
+                    products_child_ids.append(child["id"])
+                for bulkproductqtyObj in bulk.bulk_products_qty.all():
+                    if bulkproductqtyObj.product.id not in products_child_ids:
+                        bulkproductqtyObj.delete()
+                
+            else:
+                raise APIException(detail="Invalido!")
+        except IntegrityError:
+            raise PermissionDenied(detail="Lo SKU %s esiste già in questo marketplace" % (serializer.validated_data["sku"]))
 
 class ProductMultipleViewMixin(object):
 
     def get_queryset(self):
         queryset=super().get_queryset("products")
+        marketplace=self.request.GET.get("marketplace")
+        queryset=queryset.filter(marketplace=marketplace)
+
         search=None
         if self.request.GET.get("search"):
             search=self.request.GET.get("search")
-            marketplace=self.request.GET.get("marketplace")
             queryset=queryset.filter(sku__icontains=search)|queryset.filter(gtin__contains=search)\
                 |queryset.filter(char_eav__value__icontains=search,char_eav__marketplace=marketplace)\
                 |queryset.filter(text_eav__value__icontains=search,text_eav__marketplace=marketplace)
@@ -521,3 +620,38 @@ class ProductMultipleViewMixin(object):
                 
 
         return queryset.order_by("id")
+
+    def perform_create(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        try:
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                serializer.validated_data["marketplace"]=marketplace
+                serializer.validated_data["product"]=ProductSimple.objects.get(id=serializer.initial_data["child"],company=company,marketplace=marketplace)
+                serializer.validated_data["qty"]=serializer.initial_data["qty"]
+                serializer.save()
+                    
+            else:
+                raise APIException(detail="Invalido!")
+        except IntegrityError:
+            raise PermissionDenied(detail="Lo SKU %s esiste già in questo marketplace" % (serializer.validated_data["sku"]))
+
+    def perform_update(self,serializer):
+        company=Company.objects.get(id=self.request.GET.get("company"))
+        marketplace=Marketplace.objects.get(id=self.request.GET.get("marketplace"),company=company)
+        try:
+            if serializer.is_valid():
+                serializer.validated_data["company"]=company
+                serializer.validated_data["marketplace"]=marketplace
+                try:
+                    serializer.validated_data["product"]=ProductSimple.objects.get(id=serializer.initial_data["child"],company=company,marketplace=marketplace)
+                except:
+                    raise APIException(detail="Prodotto semplice non valido!")    
+                serializer.validated_data["qty"]=serializer.initial_data["qty"]
+                serializer.save()
+                    
+            else:
+                raise APIException(detail="Invalido!")
+        except IntegrityError:
+            raise PermissionDenied(detail="Errore nell'associare il nuovo prodotto")

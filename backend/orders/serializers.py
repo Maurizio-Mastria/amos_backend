@@ -16,7 +16,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class MarketplaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Marketplace
-        fields = ('id',)
+        fields = ('id')
         read_only_fields = ('id',)
         depth=0
 
@@ -32,19 +32,19 @@ class CustomerSerializer(serializers.ModelSerializer):
         
 
 class OrderDetailSerializer(serializers.ModelSerializer):
+    _date=serializers.DateTimeField(source="date",format="%d-%m-%Y %H:%M:%S")
+    _max_shipping_date=serializers.DateTimeField(source="max_shipping_date",format="%d-%m-%Y %H:%M:%S")
+    _max_consignment_date=serializers.DateTimeField(source="max_consignment_date",format="%d-%m-%Y %H:%M:%S")
     _status=serializers.CharField(source="get_status_display")
     class Meta:
         model = OrderDetail
-        fields = ('id','price','iva','shipping_price','shipping_iva','_status','shipping','customer','sku','qty')
-        read_only_fields =('id','price','iva','shipping_price','shipping_iva','_status','shipping','customer','qty')
-        depth=1
+        fields = '__all__'
+        depth=0
 
 class OrderSerializer(serializers.ModelSerializer):
     order_detail=OrderDetailSerializer(many=True)
-    company=CompanySerializer(read_only=True)
-    marketplace=MarketplaceSerializer(read_only=True)
     class Meta:
         model = Order
-        fields = ('id','order_id','order_detail','company','marketplace','order_total','order_shipping_total','order_iva','order_price','shipping_price','shipping_iva','shipping_total')
-        read_only_fields =('id','order_id',)
-        depth=2
+        fields = '__all__'
+        read_only_fields =('order_id',)
+        depth=1

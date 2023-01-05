@@ -12,10 +12,13 @@ import json
 from django.core.mail import send_mail
 
 class UserSerializer(serializers.ModelSerializer):
+    _last_login=serializers.DateTimeField(source="last_login",format="%d-%m-%Y %H:%M:%S")
+    _date_joined=serializers.DateTimeField(source="date_joined",format="%d-%m-%Y %H:%M:%S")
+
     class Meta:
         model = User
-        fields = ('id','last_login','is_superuser','username',"first_name","last_name","email","is_staff","is_active","date_joined","profile")
-        read_only_fields = list(set(fields) - set(["email",'first_name','last_name','is_active']))
+        fields = ('id','_last_login','last_login','is_superuser','username',"first_name","last_name","email","is_staff","is_active","date_joined","_date_joined","profile")
+        read_only_fields = ('_last_login','last_login','is_superuser','username',"is_staff","is_active","date_joined","_date_joined","profile")
         depth=1
 
 

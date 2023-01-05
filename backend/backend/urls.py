@@ -30,7 +30,8 @@ import shippings.views
 import imports.views
 import imports.test
 import offers.views
-import stocks.views
+import warehouses.views
+# import stocks.views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -68,19 +69,33 @@ urlpatterns = [
     path('api/products/categories/<int:pk>/', products.views.category_detail,name="category"),
     path('api/simplify/products/categories/',products.views.categories_simplify_list, name ='categories_simplify'),
     path('api/simplify/products/configurable/combinations/',products.views.SimplifyConfigurableCombinations.as_view(), name ='simplify_combinations'),
+    path('api/simplify/products/category/<int:pk>/',products.views.CategoryProductAddDelete.as_view(), name ='categories_add_delete_product'),
+    
 
-    path('api/stocks/simple/', stocks.views.stocks_simple_list, name ='stocks_simple'),
-    path('api/stocks/simple/<int:pk>/', stocks.views.stock_simple_detail,name="stock_simple"),
-    path('api/stocks/multiple/', stocks.views.stocks_multiple_list, name ='stocks_multiple'),
-    path('api/stocks/multiple/<int:pk>/', stocks.views.stock_multiple_detail,name="stock_multiple"),
-    path('api/stocks/bulk/', stocks.views.stocks_bulk_list, name ='stocks_bulk'),
-    path('api/stocks/bulk/<int:pk>/', stocks.views.stock_bulk_detail,name="stock_bulk"),
+    path('api/warehouses/', warehouses.views.warehouse_list, name ='warehouses'),
+    path('api/warehouses/<int:pk>/', warehouses.views.warehouse_detail,name="warehouse"),
+    path('api/warehouse/items/', warehouses.views.items_list, name='items_list'),
+    path('api/warehouse/items/<int:pk>/', warehouses.views.items_detail,name="items_detail"),
+    path('api/warehouse/items_qty/', warehouses.views.items_qty_list, name ='items_qty_list'),
+    path('api/warehouse/items_qty/<int:pk>/', warehouses.views.items_qty_detail,name="items_qty_detail"),
+    path('api/warehouse/files/', warehouses.views.item_info_files_list, name ='item_info_files_list'),
+    
+    
+    # path('api/stocks/multiple/', stocks.views.stocks_multiple_list, name ='stocks_multiple'),
+    # path('api/stocks/multiple/<int:pk>/', stocks.views.stock_multiple_detail,name="stock_multiple"),
+    # path('api/stocks/bulk/', stocks.views.stocks_bulk_list, name ='stocks_bulk'),
+    # path('api/stocks/bulk/<int:pk>/', stocks.views.stock_bulk_detail,name="stock_bulk"),
     
     path('api/abstract/configurable/', products.views.abstract_product_configurable_list, name ='abstract_product_configurable_list'),
     path('api/abstract/simple/', products.views.abstract_product_simple_list, name ='abstract_product_simple_list'),
     path('api/abstract/multiple/', products.views.abstract_product_multiple_list, name ='abstract_product_multiple_list'),
     path('api/abstract/bulk/', products.views.abstract_product_bulk_list, name ='abstract_product_bulk_list'),
-    
+    path('api/abstract/category/simple/', products.views.abstract_product_for_category_simple_list, name ='abstract_product_for_category_simple_list'),
+    path('api/abstract/category/configurable/', products.views.abstract_product_for_category_configurable_list, name ='abstract_product_for_category_configurable_list'),
+    path('api/abstract/category/multiple/', products.views.abstract_product_for_category_multiple_list, name ='abstract_product_for_category_multiple_list'),
+    path('api/abstract/category/bulk/', products.views.abstract_product_for_category_bulk_list, name ='abstract_product_for_category_bulk_list'),
+
+
     path('api/auth/', companies.views.auth_create,name="auth"),
 
     path('api/products/configurable/', products.views.product_configurable_list, name ='products_configurable'),
@@ -117,19 +132,30 @@ urlpatterns = [
     path('api/products/custom_attributes/', products.views.custom_attributes_list, name ='custom_attributes'),
     path('api/products/custom_attributes/<int:pk>/', products.views.custom_attribute_detail,name="custom_attribute"),
 
-
+    
     
     path('api/copy/to/simple/',products.views.CopyToSimple.as_view(),name="copy_to_simple"),
     path('api/copy/from/simple/',products.views.CopyFromSimple.as_view(),name="copy_from_simple"),
 
     path('api/offers/simple/', offers.views.product_simple_offers_list, name ='product_simple_offers'),
     path('api/offers/simple/<int:pk>/', offers.views.product_simple_offer_detail,name="product_simple_offer"),
+    path('api/offers/multiple/', offers.views.product_multiple_offers_list, name ='product_multiple_offers'),
+    path('api/offers/multiple/<int:pk>/', offers.views.product_multiple_offer_detail,name="product_multiple_offer"),
+    path('api/offers/bulk/', offers.views.product_bulk_offers_list, name ='product_bulk_offers'),
+    path('api/offers/bulk/<int:pk>/', offers.views.product_bulk_offer_detail,name="product_bulk_offer"),
+
+    path('api/simplify/offers/',offers.views.OffersView.as_view(), name ='get_simplify_offers'),
+
+    path('api/ivas/', offers.views.iva_list, name ='iva_list'),
+    path('api/ivas/<int:pk>/', offers.views.iva_detail,name="iva_detail"),
 
     path('api/messages/', messages.views.message_list, name ='messages'),
     path('api/messages/<int:pk>/', messages.views.message_detail,name="message"),
 
     path('api/orders/', orders.views.order_list, name ='orders'),
     path('api/orders/<int:pk>/', orders.views.order_detail,name="order"),
+    path('api/orders_detail/', orders.views.order_detail_list, name ='orders_detail'),
+    path('api/orders_detail/<int:pk>/', orders.views.order_detail_detail,name="order_detail"),
 
     path('api/shippings/', shippings.views.shipping_list, name ='shippings'),
     path('api/shippings/<int:pk>/', shippings.views.shipping_detail,name="shipping"),

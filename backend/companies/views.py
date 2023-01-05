@@ -67,6 +67,7 @@ class CompanyViewMixin(object):
         
 
     def perform_update(self,serializer):
+        
         try:
             if serializer.is_valid():
                 serializer.save()
